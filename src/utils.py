@@ -8,14 +8,10 @@ def recall_accuracy(emb_a, emb_b):
     db = np.concatenate(emb_a, axis=0)
     query = np.concatenate(emb_b, axis=0)
     db_length = len(db)
-
+    
     tree = KDTree(db)
-    percent = math.ceil(db_length/100)
-    ks = [1, 5, 10, percent]
-
-    metrics = {}
-    for k in ks: 
-        metrics[k] = 0
+    ks = [1, 5, 10]    
+    metrics = {k: 0 for k in ks}
 
     _, retrievals = tree.query(query, k=db_length)
 

@@ -8,8 +8,9 @@ from pytorch_metric_learning import losses
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.nn import functional as F
 import zipfile
-from src.data.uni import University1652_CVGL
 
+from src.data.uni import University1652_CVGL
+from src.utils import recall_accuracy
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -44,10 +45,12 @@ class Vanilla(pl.LightningModule):
         self.mse = nn.MSELoss()
         
         self.train_loss, self.val_loss, self.test_loss = [], [], []
+        self.train_query, self.train_ref = [], []
+        self.val_query, self.val_ref = [], []
         self.test_outputs = {'streetview': {}, 'satellite': {}}
 
     def train_dataloader(self):
-        train_dataset = University1652_CVGL()
+        train_dataset = University1652_CVGL(stage='train')
         return DataLoader(train_dataset, batch_size=16, num_workers=4, shuffle=True)
 
     def val_dataloader(self):
@@ -124,12 +127,26 @@ class Vanilla(pl.LightningModule):
         loss = self.loss_func(embs, indices_tuple=(anchors, positives, negatives))
         self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
         self.train_loss.append(loss) 
+
+        query = np.concatenate([x.cpu().detach().numpy() for x in street_out])
+        ref = np.concatenate([x.cpu().detach().numpy() for x in sat_out])
+        self.train_query.append(query)
+        self.train_ref.append(ref)
+
         return loss
     
     def on_train_epoch_end(self):
         avg_loss = torch.stack([x for x in self.train_loss]).mean()
         self.log('train_epoch_loss', avg_loss, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
         self.train_loss = []
+
+        query = np.concatenate(self.train_query)
+        ref = np.concatenate(self.train_ref)
+        metrics = recall_accuracy([query], [ref])
+        self.log('train_1', metrics[1], on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
+        self.log('train_5', metrics[5], on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
+        self.log('train_10', metrics[10], on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
+        self.train_query, self.train_ref = [], []
         return avg_loss
     
     def validation_step(self, batch, batch_idx):
@@ -142,12 +159,25 @@ class Vanilla(pl.LightningModule):
         loss = self.mse(street_out, sat_out)
         self.log('val_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
         self.val_loss.append(loss)
+
+        query = np.concatenate([x.cpu().detach().numpy() for x in street_out])
+        ref = np.concatenate([x.cpu().detach().numpy() for x in sat_out])
+        self.val_query.append(query)
+        self.val_ref.append(ref)
         return loss
     
     def on_validation_epoch_end(self):
         avg_loss = torch.stack([x for x in self.val_loss]).mean()
         self.log('val_epoch_loss', avg_loss, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
         self.val_loss = []
+
+        query = np.concatenate(self.val_query)
+        ref = np.concatenate(self.val_ref)
+        metrics = recall_accuracy([query], [ref])
+        self.log('val_1', metrics[1], on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
+        self.log('val_5', metrics[5], on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
+        self.log('val_10', metrics[10], on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
+        self.val_query, self.val_ref = [], []
         return
     
     def test_step(self, batch, batch_idx):
@@ -157,18 +187,13 @@ class Vanilla(pl.LightningModule):
         image = image.to(device)
         x_out = self.forward(image=image, branch=branch, stage='test')
         x_out = x_out.cpu().detach().numpy()
-        if batch['name'][0] == '':
-            print('Empty name')
-            breakpoint()
         self.test_outputs[branch][batch['name'][0]] = x_out
 
     def on_test_epoch_end(self):
         # Get top-10 retrievals for each streetview image and save names to file
         streetview_keys = self.test_dataset.test_order
         streetview_embeddings = [self.test_outputs['streetview'][x] for x in streetview_keys]
-        
         satellite_keys = list(self.test_outputs['satellite'].keys())
-
         satellite_embeddings = [self.test_outputs['satellite'][x] for x in satellite_keys]
         
         streetview = np.concatenate(streetview_embeddings)
@@ -192,5 +217,5 @@ class Vanilla(pl.LightningModule):
     def configure_optimizers(self):
         opt = torch.optim.AdamW(params=self.parameters(), lr=1e-4) #if self.hparams.gnn else torch.optim.AdamW(params=self.further_encoder.parameters(), lr=self.args.lr)
         sch = ReduceLROnPlateau(optimizer=opt, mode='min', factor=0.66, patience=2, verbose=True)
-        return [opt], [{"scheduler": sch, "interval": "epoch", "monitor": "train_epoch_loss"}]
+        return [opt], [{"scheduler": sch, "interval": "epoch", "monitor": "val_epoch_loss"}]
 

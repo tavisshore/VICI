@@ -39,14 +39,12 @@ class University1652_CVGL(Dataset):
 
         sat_stem = 'workshop_gallery_satellite' if stage == 'test' else 'satellite'
         street_stem = 'workshop_query_street' if stage == 'test' else 'street'
+        self.cross_views = DotMap()
 
-        # If test - just dict of image + what it is
         if stage == 'test':
-            self.cross_views = DotMap()
             counter = 0
             for id in (self.root / sat_stem).iterdir():
-                sat_name = id.stem
-                self.cross_views[counter] = DotMap(satellite=id, name=sat_name)
+                self.cross_views[counter] = DotMap(satellite=id, name=id.stem)
                 counter += 1
             for id in (self.root / street_stem).iterdir():
                 self.cross_views[counter] = DotMap(streetview=id, name=id.stem)
@@ -60,7 +58,6 @@ class University1652_CVGL(Dataset):
         else:
             self.satellite_path = self.root / sat_stem
             self.sub_dirs = [x.stem for x in self.satellite_path.iterdir() if x.is_dir()]
-            self.cross_views = DotMap()
             self.image_sets = []
 
             # TODO: change to using id - with sub dicts - allowing for cross-area vs same-area
@@ -71,12 +68,13 @@ class University1652_CVGL(Dataset):
                 self.cross_views[id] = DotMap(satellite=satellite, streetview=streetviews)
             set_keys = list(self.cross_views.keys())
 
-            # Validation references same as train or not
+            # Validation references same as train or not - split before or after - better way?
             if samearea:
                 for key in set_keys:
-                    sat = self.cross_views[key].satellite
-                    for s in sat:
-                        self.image_sets.append(DotMap(satellite=s, streetview=self.cross_views[key].streetview[0]))
+                    sat = str(self.cross_views[key].satellite[0])
+                    street = self.cross_views[key].streetview
+                    for s in street:
+                        self.image_sets.append(DotMap(satellite=sat, streetview=s))
                 if stage == 'train':
                     self.image_sets = self.image_sets[:int(proportion*len(self.image_sets))]
                 elif stage == 'val':
@@ -86,12 +84,12 @@ class University1652_CVGL(Dataset):
                     keys = set_keys[:int(proportion*len(set_keys))]
                 elif stage == 'val':
                     keys = set_keys[int(proportion*len(set_keys)):]
-
                 for key in keys:
                     sat = self.cross_views[key].satellite
-                    for s in sat:
-                        self.image_sets.append(DotMap(satellite=s, streetview=self.cross_views[key].streetview[0]))
-                
+                    street = self.cross_views[key].streetview
+                    for s in street:
+                        self.image_sets.append(DotMap(satellite=sat, streetview=s))
+
     def __len__(self):
         return len(self.image_sets)
     
@@ -104,7 +102,6 @@ class University1652_CVGL(Dataset):
             if 'streetview' in keys:
                 streetview = Image.open(sample.streetview).convert('RGB')
                 streetview = self.transform(streetview)
-                # print(f'types: {type(streetview)}, {type(sample.name)}\n')
                 return {'streetview': streetview, 'name': str(sample.name)}
             else:
                 satellite = Image.open(sample.satellite).convert('RGB')
