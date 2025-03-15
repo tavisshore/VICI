@@ -128,8 +128,8 @@ class Vanilla(pl.LightningModule):
         self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
         self.train_loss.append(loss) 
 
-        query = np.concatenate([x.cpu().detach().numpy() for x in street_out])
-        ref = np.concatenate([x.cpu().detach().numpy() for x in sat_out])
+        query = [x.cpu().detach().numpy() for x in street_out]
+        ref = [x.cpu().detach().numpy() for x in sat_out]
         self.train_query.append(query)
         self.train_ref.append(ref)
 
@@ -140,9 +140,9 @@ class Vanilla(pl.LightningModule):
         self.log('train_epoch_loss', avg_loss, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
         self.train_loss = []
 
-        query = np.concatenate(self.train_query)
-        ref = np.concatenate(self.train_ref)
-        metrics = recall_accuracy([query], [ref])
+        query = np.concatenate(self.train_query, axis=0)
+        ref = np.concatenate(self.train_ref, axis=0)
+        metrics = recall_accuracy(query, ref)
         self.log('train_1', metrics[1], on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
         self.log('train_5', metrics[5], on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
         self.log('train_10', metrics[10], on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
@@ -160,8 +160,8 @@ class Vanilla(pl.LightningModule):
         self.log('val_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
         self.val_loss.append(loss)
 
-        query = np.concatenate([x.cpu().detach().numpy() for x in street_out])
-        ref = np.concatenate([x.cpu().detach().numpy() for x in sat_out])
+        query = [x.cpu().detach().numpy() for x in street_out]
+        ref = [x.cpu().detach().numpy() for x in sat_out]
         self.val_query.append(query)
         self.val_ref.append(ref)
         return loss
@@ -171,9 +171,9 @@ class Vanilla(pl.LightningModule):
         self.log('val_epoch_loss', avg_loss, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
         self.val_loss = []
 
-        query = np.concatenate(self.val_query)
-        ref = np.concatenate(self.val_ref)
-        metrics = recall_accuracy([query], [ref])
+        query = np.concatenate(self.val_query, axis=0)
+        ref = np.concatenate(self.val_ref, axis=0)
+        metrics = recall_accuracy(query, ref)
         self.log('val_1', metrics[1], on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
         self.log('val_5', metrics[5], on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
         self.log('val_10', metrics[10], on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
@@ -217,5 +217,5 @@ class Vanilla(pl.LightningModule):
     def configure_optimizers(self):
         opt = torch.optim.AdamW(params=self.parameters(), lr=1e-4) #if self.hparams.gnn else torch.optim.AdamW(params=self.further_encoder.parameters(), lr=self.args.lr)
         sch = ReduceLROnPlateau(optimizer=opt, mode='min', factor=0.66, patience=2, verbose=True)
-        return [opt], [{"scheduler": sch, "interval": "epoch", "monitor": "val_epoch_loss"}]
+        return [opt], [{"scheduler": sch, "interval": "epoch", "monitor": "train_epoch_loss"}]
 

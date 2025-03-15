@@ -4,11 +4,9 @@ import numpy as np
 from scipy.spatial import KDTree
 
 
-def recall_accuracy(emb_a, emb_b):
-    db = np.concatenate(emb_a, axis=0)
-    query = np.concatenate(emb_b, axis=0)
+def recall_accuracy(query, db):
     db_length = len(db)
-    
+
     tree = KDTree(db)
     ks = [1, 5, 10]    
     metrics = {k: 0 for k in ks}
@@ -21,6 +19,6 @@ def recall_accuracy(emb_a, emb_b):
             metrics[k] += 1
 
     for m in metrics:
-        metrics[m] = round((metrics[m]/db_length)*100, 4)
+        metrics[m] = round((metrics[m]/len(query))*100, 4)
 
     return metrics

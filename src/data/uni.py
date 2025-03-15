@@ -85,7 +85,7 @@ class University1652_CVGL(Dataset):
                 elif stage == 'val':
                     keys = set_keys[int(proportion*len(set_keys)):]
                 for key in keys:
-                    sat = self.cross_views[key].satellite
+                    sat = str(self.cross_views[key].satellite[0])
                     street = self.cross_views[key].streetview
                     for s in street:
                         self.image_sets.append(DotMap(satellite=sat, streetview=s))
