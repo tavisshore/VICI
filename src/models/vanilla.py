@@ -1,11 +1,15 @@
 import numpy as np
 import torch
 from torch import nn
+from torch.utils.data import DataLoader
 import lightning.pytorch as pl
 from torchvision.models import convnext_tiny, ConvNeXt_Tiny_Weights, convnext_base, ConvNeXt_Base_Weights
 from pytorch_metric_learning import losses
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.nn import functional as F
+import zipfile
+from src.data.uni import University1652_CVGL
+
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -40,8 +44,20 @@ class Vanilla(pl.LightningModule):
         self.mse = nn.MSELoss()
         
         self.train_loss, self.val_loss, self.test_loss = [], [], []
-        self.test_outputs = {'streetview': [], 'satellite': {}}
+        self.test_outputs = {'streetview': {}, 'satellite': {}}
 
+    def train_dataloader(self):
+        train_dataset = University1652_CVGL()
+        return DataLoader(train_dataset, batch_size=16, num_workers=4, shuffle=True)
+
+    def val_dataloader(self):
+        val_dataset = University1652_CVGL(stage='val')
+        return DataLoader(val_dataset, batch_size=16, num_workers=4, shuffle=False)
+    
+    def test_dataloader(self):
+        self.test_dataset = University1652_CVGL(stage='test')
+        return DataLoader(self.test_dataset, batch_size=1, num_workers=4, shuffle=False)
+    
     def forward(self, street: torch.Tensor = None, sat: torch.Tensor = None, image: torch.Tensor = None, branch: str = 'streetview', stage: str = 'train'):
         if stage == 'test':
             if branch == 'streetview':
@@ -106,13 +122,13 @@ class Vanilla(pl.LightningModule):
         embs, anchors, positives, negatives = self.select_triplets(street_out, sat_out)
 
         loss = self.loss_func(embs, indices_tuple=(anchors, positives, negatives))
-        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
         self.train_loss.append(loss) 
         return loss
     
     def on_train_epoch_end(self):
         avg_loss = torch.stack([x for x in self.train_loss]).mean()
-        self.log('train_epoch_loss', avg_loss, on_epoch=True, prog_bar=True, logger=True)
+        self.log('train_epoch_loss', avg_loss, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
         self.train_loss = []
         return avg_loss
     
@@ -124,13 +140,13 @@ class Vanilla(pl.LightningModule):
         street_out, sat_out = self(street, sat)
 
         loss = self.mse(street_out, sat_out)
-        self.log('val_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log('val_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
         self.val_loss.append(loss)
         return loss
     
     def on_validation_epoch_end(self):
         avg_loss = torch.stack([x for x in self.val_loss]).mean()
-        self.log('val_epoch_loss', avg_loss, on_epoch=True, prog_bar=True, logger=True)
+        self.log('val_epoch_loss', avg_loss, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
         self.val_loss = []
         return
     
@@ -141,33 +157,38 @@ class Vanilla(pl.LightningModule):
         image = image.to(device)
         x_out = self.forward(image=image, branch=branch, stage='test')
         x_out = x_out.cpu().detach().numpy()
-
-        if branch == 'satellite':
-            self.test_outputs[branch][batch['name'][0]] = x_out
-        else:
-            self.test_outputs[branch].append(x_out)
-
+        if batch['name'][0] == '':
+            print('Empty name')
+            breakpoint()
+        self.test_outputs[branch][batch['name'][0]] = x_out
 
     def on_test_epoch_end(self):
         # Get top-10 retrievals for each streetview image and save names to file
-        streetview_embeddings = [x for x in self.test_outputs['streetview']]
+        streetview_keys = self.test_dataset.test_order
+        streetview_embeddings = [self.test_outputs['streetview'][x] for x in streetview_keys]
         
         satellite_keys = list(self.test_outputs['satellite'].keys())
-        satellite_embeddings = [self.test_outputs['satellite'][x] for x in satellite_keys]
 
+        satellite_embeddings = [self.test_outputs['satellite'][x] for x in satellite_keys]
+        
         streetview = np.concatenate(streetview_embeddings)
         satellite = np.concatenate(satellite_embeddings)
 
         # Calculate cosine similarity between streetview and satellite embeddings
         similarity = np.dot(streetview, satellite.T)
         similarity = np.argsort(similarity, axis=1)
-
-        with open('/home/shitbox/tav/challenge/answers.txt', 'w') as f:
+        answer_file = '/home/shitbox/tav/challenge/answer.txt'
+        with open(answer_file, 'w') as f:
             for idx, sim in enumerate(similarity):
                 for s in sim[:10]:
                     f.write(f"{satellite_keys[s]}\t")
                 f.write("\n")
-    
+        
+        loczip = '/home/shitbox/tav/challenge/answer.zip'
+        zip = zipfile.ZipFile(loczip, "w", zipfile.ZIP_DEFLATED)
+        zip.write (loczip)
+        zip.close()
+
     def configure_optimizers(self):
         opt = torch.optim.AdamW(params=self.parameters(), lr=1e-4) #if self.hparams.gnn else torch.optim.AdamW(params=self.further_encoder.parameters(), lr=self.args.lr)
         sch = ReduceLROnPlateau(optimizer=opt, mode='min', factor=0.66, patience=2, verbose=True)
