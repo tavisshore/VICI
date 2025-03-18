@@ -11,13 +11,13 @@ cfg = get_cfg_defaults()
 cfg.merge_from_file('config/default.yaml')
 cfg.freeze()
 
-debug = False
+debug = True
 epochs, devs = 1, 1
 wandb_logger = None
 if not debug:
     epochs = 100
     devs = 1
-    wandb_logger = plg.WandbLogger(project="ACMChallenge", save_dir=f'{cfg.system.path}/lightning_logs/', log_model=False,
+    wandb_logger = plg.WandbLogger(entity="UAVM", project="CVGL", save_dir=f'{cfg.system.path}/lightning_logs/', log_model=False,
                                    name='crossarea'
                                    )
 checkpoint_callback = ModelCheckpoint(monitor="val_epoch_loss", mode="min", dirpath=f'{cfg.system.path}/ckpts/', save_top_k=1,
@@ -29,6 +29,7 @@ trainer = pl.Trainer(max_epochs=epochs, devices=devs,
                      callbacks=[checkpoint_callback],
                      check_val_every_n_epoch=4,
                      log_every_n_steps=1,
+                     overfit_batches=10,
                      )
 trainer.fit(model)
 # TODO: fix

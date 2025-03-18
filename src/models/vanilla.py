@@ -1,3 +1,4 @@
+from pathlib import Path
 import numpy as np
 import torch
 from torch import nn
@@ -8,6 +9,7 @@ from pytorch_metric_learning import losses
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.nn import functional as F
 import zipfile
+from dotmap import DotMap
 
 from src.data.uni import University1652_CVGL
 from src.utils import recall_accuracy
@@ -38,6 +40,7 @@ class ConvNextExtractor(pl.LightningModule):
     
 
 
+
 class Vanilla(pl.LightningModule):
     def __init__(self, cfg):
         super(Vanilla, self).__init__()
@@ -52,7 +55,7 @@ class Vanilla(pl.LightningModule):
         self.train_loss, self.val_loss, self.test_loss = [], [], []
         self.train_query, self.train_ref = [], []
         self.val_query, self.val_ref = [], []
-        self.test_outputs = {'streetview': {}, 'satellite': {}}
+        self.test_outputs = DotMap(streetview=DotMap(), satellite=DotMap())
 
     def train_dataloader(self):
         train_dataset = University1652_CVGL(self.cfg, stage='train')
@@ -82,6 +85,9 @@ class Vanilla(pl.LightningModule):
         return street_out, sat_out
 
     def select_triplets(self, street: torch.Tensor, sat: torch.Tensor):
+        """
+        Triplet sampling methods - update once dataset sampler implemented
+        """
         embeddings = torch.cat((street.float(), sat.float()), dim=0)
         street_len = street.shape[0]
 
@@ -94,7 +100,6 @@ class Vanilla(pl.LightningModule):
 
             anchors, positives, ns = [], [], []
             for idx, neg in enumerate(negatives):
-                # remove self index
                 neg = neg[neg != idx]
                 neg = neg.tolist()
                 for n in neg:
@@ -111,7 +116,7 @@ class Vanilla(pl.LightningModule):
             emb_length = street.shape[0]
             anchors = torch.arange(0, emb_length)
             positives = torch.arange(emb_length, emb_length*2)
-            negatives = torch.add(torch.randint(0, emb_length, (emb_length,)), emb_length)#.repeat_interleave(self.hparams['args'].walk)
+            negatives = torch.add(torch.randint(0, emb_length, (emb_length,)), emb_length)
             while torch.any(negatives == torch.arange(emb_length, emb_length*2)):
                 negatives = torch.add(torch.randint(0, emb_length, (emb_length,)), emb_length)
             anchors = anchors.to(device)
@@ -197,7 +202,6 @@ class Vanilla(pl.LightningModule):
     def on_test_epoch_end(self):
         # Get top-10 retrievals for each streetview image and save names to file
         streetview_keys = list(self.test_outputs['streetview'].keys())
-
         streetview_embeddings = [self.test_outputs['streetview'][x] for x in streetview_keys]
         satellite_keys = list(self.test_outputs['satellite'].keys())
         satellite_embeddings = [self.test_outputs['satellite'][x] for x in satellite_keys]
@@ -208,14 +212,21 @@ class Vanilla(pl.LightningModule):
         # Calculate cosine similarity between streetview and satellite embeddings
         similarity = np.dot(streetview, satellite.T)
         similarity = np.argsort(similarity, axis=1)
-        answer_file = f'{self.cfg.system.path}/answer.txt'
+
+        # check highest numbered folder in self.cfg.system.results_path
+        folder = [f.name for f in Path(self.cfg.system.results_path).iterdir() if f.is_dir()]
+        folder = [int(f) for f in folder if f.isdigit()]
+        folder = max(folder) + 1 if folder else 0
+        folder = f'{self.cfg.system.results_path}/{folder}'
+        Path(folder).mkdir(parents=True, exist_ok=True)
+        answer_file = f'{folder}/answer.txt'
         with open(answer_file, 'w') as f:
             for idx, sim in enumerate(similarity):
                 for s in sim[:10]:
                     f.write(f"{satellite_keys[s]}\t")
                 f.write("\n")
         
-        loczip = f'{self.cfg.system.path}/answer.zip'
+        loczip = f'{folder}/answer.zip'
         zip = zipfile.ZipFile(loczip, "w")
         zip.write (loczip)
         zip.close()

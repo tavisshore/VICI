@@ -10,6 +10,26 @@ from dotmap import DotMap
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
+
+class UniSampler(torch.utils.data.Sampler):
+    """
+    Sample cross-views from dataset at equal rate per satellite reference
+    """
+    def __init__(self, data_source, shuffle=True):
+        self.data_source = data_source
+        self.shuffle = shuffle
+        self.indices = list(range(len(data_source)))
+        if self.shuffle:
+            torch.manual_seed(0)
+            torch.randperm(len(data_source))
+
+    def __iter__(self):
+        return iter(self.indices)
+
+    def __len__(self):
+        return len(self.data_source)
+
+
 class University1652_CVGL(Dataset):
     def __init__(self, cfg, stage: str = 'train'):
         self.cfg = cfg
@@ -35,17 +55,18 @@ class University1652_CVGL(Dataset):
 
         sat_stem = 'workshop_gallery_satellite' if stage == 'test' else 'satellite'
         street_stem = 'workshop_query_street' if stage == 'test' else 'street'
-        self.cross_views = DotMap()
+        self.image_pairs = DotMap()
 
         if stage == 'test':
             counter = 0
             for id in (self.root / sat_stem).iterdir():
-                self.cross_views[counter] = DotMap(satellite=id, name=id.stem)
+                self.image_pairs[counter] = DotMap(satellite=id, name=id.stem)
                 counter += 1
             for id in (self.root / street_stem).iterdir():
-                self.cross_views[counter] = DotMap(streetview=id, name=id.stem)
+                self.image_pairs[counter] = DotMap(streetview=id, name=id.stem)
                 counter += 1
-            self.image_sets = list(self.cross_views.keys())
+            self.pair_keys = list(self.image_pairs.keys())
+
             my_file = open(f"{self.cfg.data.root}/test/query_street_name.txt", "r") 
             data = my_file.read() 
             self.test_order = data.split("\n") 
@@ -54,57 +75,43 @@ class University1652_CVGL(Dataset):
         else:
             self.satellite_path = self.root / sat_stem
             self.sub_dirs = [x.stem for x in self.satellite_path.iterdir() if x.is_dir()]
-            self.image_sets = []
-
-            # Get sets of images
+            
+            # Validation references same as train or not - split before or after - better way?
+            self.pair_keys = []
             for id in self.sub_dirs:
+                # 1 satellite, varying streetview - add sampling option to not bias
                 satellite = [x for x in (self.root / sat_stem / id).iterdir() if x.is_file()]
                 streetviews = [x for x in (self.root / street_stem / id).iterdir() if x.is_file()]
-                self.cross_views[id] = DotMap(satellite=satellite, streetview=streetviews)
-            set_keys = list(self.cross_views.keys())
-
-            # Validation references same as train or not - split before or after - better way?
-            if self.cfg.data.samearea:
-                for key in set_keys:
-                    sat = str(self.cross_views[key].satellite[0])
-                    street = self.cross_views[key].streetview
-                    for s in street:
-                        self.image_sets.append(DotMap(satellite=sat, streetview=s))
-                if stage == 'train':
-                    self.image_sets = self.image_sets[:int(proportion*len(self.image_sets))]
-                elif stage == 'val':
-                    self.image_sets = self.image_sets[int(proportion*len(self.image_sets)):]
-            else:
-                if stage == 'train':
-                    keys = set_keys[:int(proportion*len(set_keys))]
-                elif stage == 'val':
-                    keys = set_keys[int(proportion*len(set_keys)):]
-                for key in keys:
-                    sat = str(self.cross_views[key].satellite[0])
-                    street = self.cross_views[key].streetview
-                    for s in street:
-                        self.image_sets.append(DotMap(satellite=sat, streetview=s))
+                self.image_pairs[id] = DotMap()
+                for i_s, s in enumerate(streetviews):
+                    self.image_pairs[id][i_s] = DotMap(streetview=s, satellite=satellite[0], pair=id, idx=i_s)
+                    self.pair_keys.append(DotMap(pair=id, index=i_s))
+            if stage == 'train':
+                self.pair_keys = self.pair_keys[:int(proportion*len(self.pair_keys))]
+            elif stage == 'val':
+                self.pair_keys = self.pair_keys[int(proportion*len(self.pair_keys)):]
 
     def __len__(self):
-        return len(self.image_sets)
+        return len(self.pair_keys)
     
     def __getitem__(self, idx):
-        sample = self.image_sets[idx]
+        sample = self.pair_keys[idx]
 
         if self.stage == 'test':
-            sample = self.cross_views[sample]
-            keys = sample.keys()
+            imgs = self.image_pairs[sample]
+            keys = imgs.keys()
             if 'streetview' in keys:
-                streetview = Image.open(sample.streetview).convert('RGB')
+                streetview = Image.open(imgs.streetview).convert('RGB')
                 streetview = self.transform(streetview)
-                return {'streetview': streetview, 'name': str(sample.name)}
+                return {'streetview': streetview, 'name': str(imgs.name)}
             else:
-                satellite = Image.open(sample.satellite).convert('RGB')
+                satellite = Image.open(imgs.satellite).convert('RGB')
                 satellite = self.transform(satellite)
-                return {'satellite': satellite, 'name': str(sample.name)}
+                return {'satellite': satellite, 'name': str(imgs.name)}
         else:        
-            streetview = Image.open(sample.streetview).convert('RGB')
-            satellite = Image.open(sample.satellite).convert('RGB')
+            imgs = self.image_pairs[sample.pair][sample.index]
+            streetview = Image.open(imgs.streetview).convert('RGB')
+            satellite = Image.open(imgs.satellite).convert('RGB')
             streetview = self.augment(streetview) if self.cfg.data.augment else self.transform(streetview)
             satellite = self.augment(satellite) if self.cfg.data.augment else self.transform(satellite)
             return {'streetview': streetview, 'satellite': satellite}
@@ -113,7 +120,7 @@ class University1652_CVGL(Dataset):
 
             
 if __name__ == '__main__':
-    data = University1652_CVGL(stage='test')
+    data = University1652_CVGL(cfg=cfg, stage='test')
     item = data.__getitem__(0)
     # print path
     
