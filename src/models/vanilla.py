@@ -16,13 +16,18 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
 class ConvNextExtractor(pl.LightningModule):
-    def __init__(self):
+    def __init__(self, cfg):
         super().__init__()
-        self.map_conv = convnext_tiny(weights=ConvNeXt_Tiny_Weights.DEFAULT)
-        self.map_conv.classifier[2] = nn.Identity()
-
-        self.pov_conv = convnext_tiny(weights=ConvNeXt_Tiny_Weights.DEFAULT)
-        self.pov_conv.classifier[2] = nn.Identity()
+        if cfg.model.size == 'tiny':
+            self.map_conv = convnext_tiny(weights=ConvNeXt_Tiny_Weights.DEFAULT)
+            self.map_conv.classifier[2] = nn.Identity()
+            self.pov_conv = convnext_tiny(weights=ConvNeXt_Tiny_Weights.DEFAULT)
+            self.pov_conv.classifier[2] = nn.Identity()
+        elif cfg.model.size == 'base':
+            self.map_conv = convnext_base(weights=ConvNeXt_Base_Weights.DEFAULT)
+            self.map_conv.classifier[2] = nn.Identity()
+            self.pov_conv = convnext_base(weights=ConvNeXt_Base_Weights.DEFAULT)
+            self.pov_conv.classifier[2] = nn.Identity()
         
     def embed_map(self, map_tile: torch.Tensor) -> torch.Tensor: 
         return self.map_conv(map_tile)
@@ -34,11 +39,11 @@ class ConvNextExtractor(pl.LightningModule):
 
 
 class Vanilla(pl.LightningModule):
-    def __init__(self, selection: str = 'feat'):
+    def __init__(self, cfg):
         super(Vanilla, self).__init__()
-        self.selection = selection
+        self.cfg = cfg
 
-        self.model = ConvNextExtractor()
+        self.model = ConvNextExtractor(cfg)
         self.model.to(device)
 
         self.loss_func = losses.NTXentLoss()
@@ -50,15 +55,15 @@ class Vanilla(pl.LightningModule):
         self.test_outputs = {'streetview': {}, 'satellite': {}}
 
     def train_dataloader(self):
-        train_dataset = University1652_CVGL(stage='train')
+        train_dataset = University1652_CVGL(self.cfg, stage='train')
         return DataLoader(train_dataset, batch_size=16, num_workers=4, shuffle=True)
 
     def val_dataloader(self):
-        val_dataset = University1652_CVGL(stage='val')
+        val_dataset = University1652_CVGL(self.cfg, stage='val')
         return DataLoader(val_dataset, batch_size=16, num_workers=4, shuffle=False)
     
     def test_dataloader(self):
-        self.test_dataset = University1652_CVGL(stage='test')
+        self.test_dataset = University1652_CVGL(self.cfg, stage='test')
         return DataLoader(self.test_dataset, batch_size=1, num_workers=4, shuffle=False)
     
     def forward(self, street: torch.Tensor = None, sat: torch.Tensor = None, image: torch.Tensor = None, branch: str = 'streetview', stage: str = 'train'):
@@ -80,7 +85,7 @@ class Vanilla(pl.LightningModule):
         embeddings = torch.cat((street.float(), sat.float()), dim=0)
         street_len = street.shape[0]
 
-        if self.selection == 'feat':
+        if self.cfg.model.selection == 'feat':
             # Select triplets based on feature similarity - most dissimilar sat is negative
             similarity = torch.nn.functional.cosine_similarity(street.unsqueeze(1), sat.unsqueeze(0), dim=2)
             
@@ -191,7 +196,8 @@ class Vanilla(pl.LightningModule):
 
     def on_test_epoch_end(self):
         # Get top-10 retrievals for each streetview image and save names to file
-        streetview_keys = self.test_dataset.test_order
+        streetview_keys = list(self.test_outputs['streetview'].keys())
+
         streetview_embeddings = [self.test_outputs['streetview'][x] for x in streetview_keys]
         satellite_keys = list(self.test_outputs['satellite'].keys())
         satellite_embeddings = [self.test_outputs['satellite'][x] for x in satellite_keys]
@@ -202,15 +208,15 @@ class Vanilla(pl.LightningModule):
         # Calculate cosine similarity between streetview and satellite embeddings
         similarity = np.dot(streetview, satellite.T)
         similarity = np.argsort(similarity, axis=1)
-        answer_file = '/home/shitbox/tav/challenge/answer.txt'
+        answer_file = f'{self.cfg.system.path}/answer.txt'
         with open(answer_file, 'w') as f:
             for idx, sim in enumerate(similarity):
                 for s in sim[:10]:
                     f.write(f"{satellite_keys[s]}\t")
                 f.write("\n")
         
-        loczip = '/home/shitbox/tav/challenge/answer.zip'
-        zip = zipfile.ZipFile(loczip, "w", zipfile.ZIP_DEFLATED)
+        loczip = f'{self.cfg.system.path}/answer.zip'
+        zip = zipfile.ZipFile(loczip, "w")
         zip.write (loczip)
         zip.close()
 

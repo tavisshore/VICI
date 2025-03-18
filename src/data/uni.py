@@ -11,14 +11,10 @@ from dotmap import DotMap
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 class University1652_CVGL(Dataset):
-    def __init__(self, root: str = '/home/shitbox/datasets/University-Release/', batch_size: int = 32, num_workers: int = 4, drone: bool = False, stage: str = 'train',
-                 augment: bool = True, samearea: bool = False):
+    def __init__(self, cfg, stage: str = 'train'):
+        self.cfg = cfg
         self.stage = stage
-        self.root = Path(root) / stage if stage != 'val' else Path(root) / 'train'
-        self.batch_size = batch_size
-        self.num_workers = num_workers
-        self.aug = augment
-        self.drone = drone # NOTE: Implement drone data?
+        self.root = Path(self.cfg.data.root) / stage if stage != 'val' else Path(self.cfg.data.root) / 'train'
         proportion = 0.9
     
         self.transform = transforms.Compose([
@@ -50,17 +46,16 @@ class University1652_CVGL(Dataset):
                 self.cross_views[counter] = DotMap(streetview=id, name=id.stem)
                 counter += 1
             self.image_sets = list(self.cross_views.keys())
-            my_file = open("/home/shitbox/datasets/University-Release/test/query_street_name.txt", "r") 
+            my_file = open(f"{self.cfg.data.root}/test/query_street_name.txt", "r") 
             data = my_file.read() 
             self.test_order = data.split("\n") 
             self.test_order = [x.split('.')[0] for x in self.test_order][:-1]
-            my_file.close() 
+            my_file.close()
         else:
             self.satellite_path = self.root / sat_stem
             self.sub_dirs = [x.stem for x in self.satellite_path.iterdir() if x.is_dir()]
             self.image_sets = []
 
-            # TODO: change to using id - with sub dicts - allowing for cross-area vs same-area
             # Get sets of images
             for id in self.sub_dirs:
                 satellite = [x for x in (self.root / sat_stem / id).iterdir() if x.is_file()]
@@ -69,7 +64,7 @@ class University1652_CVGL(Dataset):
             set_keys = list(self.cross_views.keys())
 
             # Validation references same as train or not - split before or after - better way?
-            if samearea:
+            if self.cfg.data.samearea:
                 for key in set_keys:
                     sat = str(self.cross_views[key].satellite[0])
                     street = self.cross_views[key].streetview
@@ -110,8 +105,8 @@ class University1652_CVGL(Dataset):
         else:        
             streetview = Image.open(sample.streetview).convert('RGB')
             satellite = Image.open(sample.satellite).convert('RGB')
-            streetview = self.augment(streetview) if self.aug else self.transform(streetview)
-            satellite = self.augment(satellite) if self.aug else self.transform(satellite)
+            streetview = self.augment(streetview) if self.cfg.data.augment else self.transform(streetview)
+            satellite = self.augment(satellite) if self.cfg.data.augment else self.transform(satellite)
             return {'streetview': streetview, 'satellite': satellite}
 
 
@@ -120,6 +115,7 @@ class University1652_CVGL(Dataset):
 if __name__ == '__main__':
     data = University1652_CVGL(stage='test')
     item = data.__getitem__(0)
+    # print path
     
         
 

@@ -1,0 +1,12 @@
+system:
+  gpus: -1
+  workers: 4
+
+data:
+  root: '/home/shitbox/datasets/University-Release/'
+  samearea: False
+  augment: True
+
+model:
+  selection: 'feat'
+  size: 'tiny'
