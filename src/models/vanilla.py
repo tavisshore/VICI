@@ -30,6 +30,8 @@ class ConvNextExtractor(pl.LightningModule):
             self.street_conv.classifier[2] = nn.Identity()
             self.sat_conv = convnext_base(weights=ConvNeXt_Base_Weights.DEFAULT)
             self.sat_conv.classifier[2] = nn.Identity()
+
+        # Add projection head
         
     def embed_street(self, pov_tile: torch.Tensor): 
         return self.street_conv(pov_tile)
@@ -85,9 +87,6 @@ class Vanilla(pl.LightningModule):
         return street_out, sat_out
 
     def exhaustive_triplets(self, street: torch.Tensor, sat: torch.Tensor, labels: torch.Tensor):
-        """
-        Triplet sampling methods - update once dataset sampler implemented
-        """
         embeddings = torch.cat((street.float(), sat.float()), dim=0)
         batch_size = street.shape[0]
 
@@ -123,7 +122,6 @@ class Vanilla(pl.LightningModule):
         ref = [x.cpu().detach().numpy() for x in sat_out]
         self.train_query.append(query)
         self.train_ref.append(ref)
-
         return loss
     
     def on_train_epoch_end(self):

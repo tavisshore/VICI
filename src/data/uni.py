@@ -161,14 +161,9 @@ if __name__ == '__main__':
     cfg = CN()
     cfg.data = CN()
     cfg.data.root = '/home/shitbox/datasets/University-Release/'
-    cfg.data.train_prop = 0.1
     cfg.data.augment = True
     cfg.data.sample_equal = True
-
     data = University1652_CVGL(cfg=cfg, stage='train')
-
-    # sampler = OverSampler(data)
-
     item = data.__getitem__(0)
     
     

@@ -8,7 +8,6 @@ data:
   root: '/home/shitbox/datasets/University-Release/'
   samearea: False
   augment: True
-  train_prop: 1.0
   sample_equal: True
 
 model:

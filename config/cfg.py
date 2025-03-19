@@ -19,7 +19,6 @@ _C.data = CN()
 _C.data.root = '/home/shitbox/datasets/University-Release/'
 _C.data.samearea = False
 _C.data.augment = True
-_C.data.train_prop = 0.9
 _C.data.sample_equal = True
 
 _C.model = CN()
