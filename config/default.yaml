@@ -1,3 +1,4 @@
+exp_name: 'default'
 system:
   gpus: -1
   workers: 4
@@ -7,7 +8,8 @@ data:
   root: '/home/shitbox/datasets/University-Release/'
   samearea: False
   augment: True
-  val_prop: 1.0
+  train_prop: 1.0
+  sample_equal: True
 
 model:
   selection: '' #feat

@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 import lightning.pytorch as pl
 from torchvision.models import convnext_tiny, ConvNeXt_Tiny_Weights, convnext_base, ConvNeXt_Base_Weights
 from pytorch_metric_learning import losses
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR
 from torch.nn import functional as F
 import zipfile
 from dotmap import DotMap
@@ -84,12 +84,12 @@ class Vanilla(pl.LightningModule):
         sat_out = F.normalize(sat_out, p=2, dim=1)
         return street_out, sat_out
 
-    def select_triplets(self, street: torch.Tensor, sat: torch.Tensor):
+    def select_triplets(self, street: torch.Tensor, sat: torch.Tensor, labels: torch.Tensor):
         """
         Triplet sampling methods - update once dataset sampler implemented
         """
         embeddings = torch.cat((street.float(), sat.float()), dim=0)
-        street_len = street.shape[0]
+        batch_size = street.shape[0]
 
         if self.cfg.model.selection == 'feat':
             # Select triplets based on feature similarity - most dissimilar sat is negative
@@ -104,37 +104,41 @@ class Vanilla(pl.LightningModule):
                 neg = neg.tolist()
                 for n in neg:
                     anchors.append(idx)
-                    positives.append(idx+street_len)
-                    ns.append(n+street_len)
+                    positives.append(idx+batch_size)
+                    ns.append(n+batch_size)
 
             anchors = torch.tensor(anchors, device=device)
             positives = torch.tensor(positives, device=device)
             negatives = torch.tensor(ns, device=device)
             return embeddings, anchors, positives, negatives
         else:
-            embeddings = torch.cat((street.float(), sat.float()), dim=0)
-            emb_length = street.shape[0]
-            anchors = torch.arange(0, emb_length)
-            positives = torch.arange(emb_length, emb_length*2)
-            negatives = torch.add(torch.randint(0, emb_length, (emb_length,)), emb_length)
-            while torch.any(negatives == torch.arange(emb_length, emb_length*2)):
-                negatives = torch.add(torch.randint(0, emb_length, (emb_length,)), emb_length)
-            anchors = anchors.to(device)
-            positives = positives.to(device)
-            negatives = negatives.to(device)
+            # for each sample, select all other samples as negatives unless they are the same class
+            anchors = torch.arange(batch_size).repeat_interleave(2)
+            positives = torch.arange(batch_size, 2 * batch_size).repeat_interleave(2)
+            negatives = torch.stack([
+                torch.cat((torch.arange(i), torch.arange(i + 1, batch_size)))
+                for i in range(batch_size)
+            ]).reshape(batch_size, -1)[:, :2].flatten()
+
+            label_tensor = torch.tensor([hash(label) for label in labels])  
+            mask = label_tensor[anchors] != label_tensor[negatives]
+            anchors, positives, negatives = anchors[mask], positives[mask], negatives[mask]
+            anchors, positives, negatives = anchors.to(device), positives.to(device), negatives.to(device)
+
             return embeddings, anchors, positives, negatives
 
     def training_step(self, batch, batch_idx):
         street, sat = batch['streetview'], batch['satellite']
+        labels = batch['label']
         sat = sat.to(device)
         street = street.to(device)
         street_out, sat_out = self(street, sat)
 
         # Selects negatives based on feature similarity - update with sampler
-        embs, anchors, positives, negatives = self.select_triplets(street_out, sat_out)
+        embs, anchors, positives, negatives = self.select_triplets(street_out, sat_out, labels)
 
         loss = self.loss_func(embs, indices_tuple=(anchors, positives, negatives))
-        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
+        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True, sync_dist=True, batch_size=street.shape[0])
         self.train_loss.append(loss) 
 
         query = [x.cpu().detach().numpy() for x in street_out]
@@ -166,7 +170,7 @@ class Vanilla(pl.LightningModule):
         street_out, sat_out = self(street, sat)
 
         loss = self.mse(street_out, sat_out)
-        self.log('val_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
+        self.log('val_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True, sync_dist=True, batch_size=street.shape[0])
         self.val_loss.append(loss)
 
         query = [x.cpu().detach().numpy() for x in street_out]
@@ -200,7 +204,7 @@ class Vanilla(pl.LightningModule):
 
     def on_test_epoch_end(self):
         # Get top-10 retrievals for each streetview image and save names to file
-        streetview_keys = list(self.test_outputs['streetview'].keys())
+        streetview_keys = list(self.test_outputs['streetview'].keys()) # Orders test outputs by dataset.test_order
         streetview_embeddings = [self.test_outputs['streetview'][x] for x in streetview_keys]
         satellite_keys = list(self.test_outputs['satellite'].keys())
         satellite_embeddings = [self.test_outputs['satellite'][x] for x in satellite_keys]
@@ -226,12 +230,14 @@ class Vanilla(pl.LightningModule):
                 f.write("\n")
         
         loczip = f'{folder}/answer.zip'
-        zip = zipfile.ZipFile(loczip, "w")
+        zip = zipfile.ZipFile(loczip, "w", compression=zipfile.ZIP_STORED)
         zip.write (loczip)
         zip.close()
+        return folder
 
     def configure_optimizers(self):
         opt = torch.optim.AdamW(params=self.parameters(), lr=1e-4) #if self.hparams.gnn else torch.optim.AdamW(params=self.further_encoder.parameters(), lr=self.args.lr)
-        sch = ReduceLROnPlateau(optimizer=opt, mode='min', factor=0.5, patience=2, verbose=True)
+        # sch = ReduceLROnPlateau(optimizer=opt, mode='min', factor=0.5, patience=2, verbose=True)
+        sch = StepLR(optimizer=opt, step_size=40, gamma=0.5, verbose=True)
         return [opt], [{"scheduler": sch, "interval": "epoch", "monitor": "train_epoch_loss"}]
 
