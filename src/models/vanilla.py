@@ -17,31 +17,80 @@ from src.utils import recall_accuracy
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
+class LinearLayer(nn.Module):
+    def __init__(self, in_features, out_features, use_bias = True, use_bn = False, **kwargs):
+        super(LinearLayer, self).__init__(**kwargs)
+        self.in_features = in_features
+        self.out_features = out_features
+        self.use_bias = use_bias
+        self.use_bn = use_bn
+        
+        self.linear = nn.Linear(self.in_features, self.out_features, bias = self.use_bias and not self.use_bn)
+        if self.use_bn:
+             self.bn = nn.BatchNorm1d(self.out_features)
+
+    def forward(self,x):
+        x = self.linear(x)
+        if self.use_bn:
+            x = self.bn(x)
+        return x
+
+class ProjectionHead(nn.Module):
+    def __init__(self, in_features, hidden_features, out_features, head_type = 'nonlinear', **kwargs):
+        super(ProjectionHead,self).__init__(**kwargs)
+        self.in_features = in_features
+        self.out_features = out_features
+        self.hidden_features = hidden_features
+        self.head_type = head_type
+
+        if self.head_type == 'linear':
+            self.layers = LinearLayer(self.in_features, self.out_features, False, True)
+        elif self.head_type == 'nonlinear':
+            self.layers = nn.Sequential(LinearLayer(self.in_features, self.hidden_features, True, True),
+                                        nn.ReLU(),
+                                        LinearLayer(self.hidden_features, self.out_features, False, True))
+    
+    def forward(self,x):
+        x = self.layers(x)
+        return x
+
+
 class ConvNextExtractor(pl.LightningModule):
     def __init__(self, cfg):
         super().__init__()
+        self.cfg = cfg
         if cfg.model.size == 'tiny':
             self.street_conv = convnext_tiny(weights=ConvNeXt_Tiny_Weights.DEFAULT)
             self.street_conv.classifier[2] = nn.Identity()
             self.sat_conv = convnext_tiny(weights=ConvNeXt_Tiny_Weights.DEFAULT)
             self.sat_conv.classifier[2] = nn.Identity()
+            if cfg.model.head.use:
+                assert self.cfg.mode.head.params.inter_dims == 768, f"Inter dims should be 768 for tiny model, but got {self.cfg.mode.head.params.inter_dims}"
         elif cfg.model.size == 'base':
             self.street_conv = convnext_base(weights=ConvNeXt_Base_Weights.DEFAULT)
             self.street_conv.classifier[2] = nn.Identity()
             self.sat_conv = convnext_base(weights=ConvNeXt_Base_Weights.DEFAULT)
             self.sat_conv.classifier[2] = nn.Identity()
+            if cfg.model.head.use:
+                assert self.cfg.mode.head.params.inter_dims == 1024, f"Inter dims should be 1024 for base model, but got {self.cfg.mode.head.params.inter_dims}"
 
         # Add projection head
+        if cfg.model.head.use:
+            self.street_head = ProjectionHead(cfg.mode.head.params.inter_dims, cfg.mode.head.params.hidden_dims, cfg.mode.head.params.output_dims)
+            self.sat_head = ProjectionHead(cfg.mode.head.params.inter_dims, cfg.mode.head.params.hidden_dims, cfg.mode.head.params.output_dims)
         
     def embed_street(self, pov_tile: torch.Tensor): 
-        return self.street_conv(pov_tile)
+        x = self.street_conv(pov_tile)
+        if self.cfg.model.head.use:
+            x = self.street_head(x)
+        return x
     
     def embed_sat(self, map_tile: torch.Tensor) -> torch.Tensor: 
-        return self.sat_conv(map_tile)
+        x = self.sat_conv(map_tile)
+        if self.cfg.model.head.use:
+            x = self.sat_head(x)
+        return x
     
-
-    
-
 
 class Vanilla(pl.LightningModule):
     def __init__(self, cfg):
@@ -200,12 +249,7 @@ class Vanilla(pl.LightningModule):
 
         # check highest numbered folder in self.cfg.system.results_path
         results_counter = 0
-        folder = [f.name for f in Path(self.cfg.system.results_path).iterdir() if f.is_dir()]
-        folder = [int(f) for f in folder if f.isdigit()]
-        folder = max(folder) + 1 if folder else 0
-        folder = f'{self.cfg.system.results_path}/{folder}'
-        Path(folder).mkdir(parents=True, exist_ok=True)
-        answer_file = f'{folder}/answer.txt'
+        answer_file = f'{self.cfg.system.results_path}/answer.txt'
         with open(answer_file, 'w') as f:
             for idx, sim in enumerate(similarity):
                 for s in sim[:10]:
@@ -213,15 +257,24 @@ class Vanilla(pl.LightningModule):
                 f.write("\n")
                 results_counter += 1
         # print(f'Number of Results: {results_counter}')
-        loczip = f'{folder}/answer.zip'
+        loczip = f'{self.cfg.system.results_path}/answer.zip'
         zip = zipfile.ZipFile(loczip, "w", compression=zipfile.ZIP_STORED)
         zip.write (loczip)
         zip.close()
-        return folder
 
+        # Save config & model
+        self.trainer.save_checkpoint(f"{self.cfg.system.results_path}/final_model.ckpt")
+        with open(f"{self.cfg.system.results_path}/config.yaml", "w") as f:
+            f.write(self.cfg.dump())
+        
     def configure_optimizers(self):
         opt = torch.optim.AdamW(params=self.parameters(), lr=1e-4) #if self.hparams.gnn else torch.optim.AdamW(params=self.further_encoder.parameters(), lr=self.args.lr)
-        sch = ReduceLROnPlateau(optimizer=opt, mode='min', factor=0.5, verbose=True)
-        # sch = StepLR(optimizer=opt, step_size=40, gamma=0.5, verbose=True)
-        return [opt], [{"scheduler": sch, "interval": "epoch", 'frequency': 5, "monitor": "val_epoch_loss"}]
+        if self.cfg.system.scheduler == 'plateau':
+            sch = ReduceLROnPlateau(optimizer=opt, mode='min', factor=0.5, verbose=True)
+            return [opt], [{"scheduler": sch, "interval": "epoch", 'frequency': 5, "monitor": "val_epoch_loss"}]
+        elif self.cfg.system.scheduler == 'step':
+            sch = StepLR(optimizer=opt, step_size=40, gamma=0.5, verbose=True)
+            return [opt], [{"scheduler": sch, "interval": "epoch"}]
+        else:
+            return opt
 

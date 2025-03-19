@@ -5,6 +5,7 @@ from lightning.pytorch.callbacks import ModelCheckpoint
 
 from src.models.vanilla import Vanilla
 from config.cfg import get_cfg_defaults
+from src.utils import results_dir
 pl.seed_everything(42)
 
 args = argparse.ArgumentParser()
@@ -21,31 +22,31 @@ for key, value in list(args.items()):
 cfg = get_cfg_defaults()
 cfg.merge_from_file(f'{cfg.system.path}/config/{args["config"]}')
 cfg.merge_from_list(arglist)
+# Why does this create multiple dirs??
+cfg.system.results_path = results_dir(cfg)
+
 
 if not cfg.debug:
-    wandb_logger = plg.WandbLogger(entity="UAVM", project="CVGL", save_dir=f'{cfg.system.path}/lightning_logs/', log_model=False,
+    wandb_logger = plg.WandbLogger(entity="UAVM", project="CVGL", save_dir=f'{cfg.system.results_path}/', log_model=False,
                                    name=cfg.exp_name)
     wandb_logger.log_hyperparams(cfg)
-    checkpoint_callback = ModelCheckpoint(monitor="val_epoch_loss", mode="min", dirpath=f'{cfg.system.path}/ckpts/', save_top_k=1,
-                                        filename='vanilla-{epoch:02d}-{val_epoch_loss:.6f}')
 else:
-    cfg.system.batch_size = 5
-    cfg.model.epochs, cfg.system.workers = 1, 1
+    cfg.system.batch_size = 8
+    cfg.model.epochs, cfg.system.workers = 25, 1
     wandb_logger = None
+
+checkpoint_callback = ModelCheckpoint(monitor="val_1", mode="max", dirpath=f'{cfg.system.results_path}/ckpts/', save_top_k=1,
+                                      filename='{epoch}-{val_1:.2f}')
 
 model = Vanilla(cfg)
 trainer = pl.Trainer(max_epochs=cfg.model.epochs, devices=cfg.system.workers, 
                      logger=wandb_logger if not cfg.debug else None,
-                     callbacks=[checkpoint_callback] if not cfg.debug else None,
+                     callbacks=[checkpoint_callback],
                      check_val_every_n_epoch=4,
                      overfit_batches=4 if cfg.debug else 0,
-                     num_sanity_val_steps=0
-                     )
+                     num_sanity_val_steps=0,
+                     default_root_dir=cfg.system.results_path)
 trainer.fit(model)
-# TODO: fix
-# model = Vanilla.load_from_checkpoint(checkpoint_callback.best_model_path)
-results_folder = trainer.test(model)
+trainer = pl.Trainer(devices=1, logger=wandb_logger if not cfg.debug else None, default_root_dir=cfg.system.results_path)
+trainer.test(model, ckpt_path=checkpoint_callback.best_model_path)
 
-# save config 
-# with open(f"{results_folder}/config.yaml", "w") as f:
-#   f.write(cfg.dump())
