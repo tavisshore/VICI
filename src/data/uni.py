@@ -118,13 +118,13 @@ class University1652_CVGL(Dataset):
                 sat_counter += 1
             self.pair_keys = list(self.image_pairs.keys())
 
-            my_file = open(f"{self.cfg.data.root}/test/query_street_name.txt", "r") # query_street_name - 2579? or query_label 2579?
+            my_file = open(f"{self.cfg.data.root}/test/query_street_name.txt", "r") # BOTH WRONG - NEED CORRECT FILE! query_street_name - 2579? or query_label 2579?
             data = my_file.read() 
             self.test_order = data.split("\n") 
             self.test_order = [x.split('.')[0] for x in self.test_order]
             self.test_order = self.test_order[:-1]
             my_file.close()
-        print(f'{stage} - streetview: {street_counter}, satellite: {sat_counter}\n')
+        # print(f'{stage} - streetview: {street_counter}, satellite: {sat_counter}\n')
 
     def __len__(self):
         return len(self.pair_keys)

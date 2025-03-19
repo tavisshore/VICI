@@ -39,6 +39,7 @@ trainer = pl.Trainer(max_epochs=cfg.model.epochs, devices=cfg.system.workers,
                      callbacks=[checkpoint_callback] if not cfg.debug else None,
                      check_val_every_n_epoch=4,
                      overfit_batches=4 if cfg.debug else 0,
+                     num_sanity_val_steps=0
                      )
 trainer.fit(model)
 # TODO: fix

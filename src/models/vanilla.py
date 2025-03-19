@@ -116,7 +116,7 @@ class Vanilla(pl.LightningModule):
         embs, anchors, positives, negatives = self.exhaustive_triplets(street_out, sat_out, labels)
         loss = self.loss_func(embs, indices_tuple=(anchors, positives, negatives))
 
-        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True, sync_dist=True, batch_size=street.shape[0])
+        self.log('train_loss', loss, on_step=True, prog_bar=True, logger=True, sync_dist=True, batch_size=street.shape[0])
         self.train_loss.append(loss) 
 
         query = [x.cpu().detach().numpy() for x in street_out]
@@ -135,8 +135,8 @@ class Vanilla(pl.LightningModule):
         ref = np.concatenate(self.train_ref, axis=0)
         metrics = recall_accuracy(query, ref)
         self.log('train_1', metrics[1], on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
-        self.log('train_5', metrics[5], on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
-        self.log('train_10', metrics[10], on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
+        self.log('train_5', metrics[5], on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
+        self.log('train_10', metrics[10], on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
         self.train_query, self.train_ref = [], []
         return avg_loss
     
@@ -148,7 +148,7 @@ class Vanilla(pl.LightningModule):
         street_out, sat_out = self(street, sat)
         loss = self.mse(street_out, sat_out)
 
-        self.log('val_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True, sync_dist=True, batch_size=street.shape[0])
+        self.log('val_loss', loss, on_step=True, prog_bar=False, logger=True, sync_dist=True, batch_size=street.shape[0])
         self.val_loss.append(loss)
 
         query = [x.cpu().detach().numpy() for x in street_out]
@@ -166,8 +166,8 @@ class Vanilla(pl.LightningModule):
         ref = np.concatenate(self.val_ref, axis=0)
         metrics = recall_accuracy(query, ref)
         self.log('val_1', metrics[1], on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
-        self.log('val_5', metrics[5], on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
-        self.log('val_10', metrics[10], on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
+        self.log('val_5', metrics[5], on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
+        self.log('val_10', metrics[10], on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
         self.val_query, self.val_ref = [], []
         return
     
@@ -182,10 +182,10 @@ class Vanilla(pl.LightningModule):
 
     def on_test_epoch_end(self):
         # Get top-10 retrievals for each streetview image and save names to file
-        # streetview_keys = list(self.test_outputs['streetview'].keys()) # Orders test outputs by dataset.test_order
+        streetview_keys = list(self.test_outputs['streetview'].keys()) 
         # Should be 7737 values at the end
-        streetview_keys = self.test_dataset.test_order
-        print(f'ordered length: {len(streetview_keys)}')
+        # streetview_keys = self.test_dataset.test_order
+        # print(f'ordered length: {len(streetview_keys)}')
         streetview_embeddings = [self.test_outputs['streetview'][x] for x in streetview_keys]
         satellite_keys = list(self.test_outputs['satellite'].keys())
         satellite_embeddings = [self.test_outputs['satellite'][x] for x in satellite_keys]
@@ -194,11 +194,11 @@ class Vanilla(pl.LightningModule):
         satellite = np.concatenate(satellite_embeddings)
 
         # Calculate cosine similarity between streetview and satellite embeddings
-        print(f'input shapes: {streetview.shape}, {satellite.shape}')
+        # print(f'input shapes: {streetview.shape}, {satellite.shape}')
         similarity = np.dot(streetview, satellite.T)
         similarity = np.argsort(similarity, axis=1)
 
-        print(f'\nSim Shape: {similarity.shape}\n')
+        # print(f'\nSim Shape: {similarity.shape}\n')
 
         # check highest numbered folder in self.cfg.system.results_path
         results_counter = 0
@@ -214,7 +214,7 @@ class Vanilla(pl.LightningModule):
                     f.write(f"{satellite_keys[s]}\t")
                 f.write("\n")
                 results_counter += 1
-        print(f'Number of Results: {results_counter}')
+        # print(f'Number of Results: {results_counter}')
         loczip = f'{folder}/answer.zip'
         zip = zipfile.ZipFile(loczip, "w", compression=zipfile.ZIP_STORED)
         zip.write (loczip)
@@ -223,7 +223,7 @@ class Vanilla(pl.LightningModule):
 
     def configure_optimizers(self):
         opt = torch.optim.AdamW(params=self.parameters(), lr=1e-4) #if self.hparams.gnn else torch.optim.AdamW(params=self.further_encoder.parameters(), lr=self.args.lr)
-        # sch = ReduceLROnPlateau(optimizer=opt, mode='min', factor=0.5, patience=2, verbose=True)
-        sch = StepLR(optimizer=opt, step_size=40, gamma=0.5, verbose=True)
-        return [opt], [{"scheduler": sch, "interval": "epoch", "monitor": "train_epoch_loss"}]
+        sch = ReduceLROnPlateau(optimizer=opt, mode='min', factor=0.5, verbose=True)
+        # sch = StepLR(optimizer=opt, step_size=40, gamma=0.5, verbose=True)
+        return [opt], [{"scheduler": sch, "interval": "epoch", 'frequency': 5, "monitor": "val_epoch_loss"}]
 
