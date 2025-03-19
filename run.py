@@ -43,7 +43,11 @@ trainer = pl.Trainer(max_epochs=cfg.model.epochs, devices=cfg.system.workers,
                      num_sanity_val_steps=0
                      )
 trainer.fit(model)
+
+
+
 # TODO: fix
 # model = Vanilla.load_from_checkpoint(checkpoint_callback.best_model_path)
+trainer = pl.Trainer(devices=1, logger=wandb_logger if not cfg.debug else None)
 trainer.test(model)
 
