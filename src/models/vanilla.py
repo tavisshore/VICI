@@ -221,7 +221,9 @@ class Vanilla(pl.LightningModule):
 
     def configure_optimizers(self):
         opt = torch.optim.AdamW(params=self.parameters(), lr=1e-4) #if self.hparams.gnn else torch.optim.AdamW(params=self.further_encoder.parameters(), lr=self.args.lr)
-        sch = ReduceLROnPlateau(optimizer=opt, mode='min', factor=0.5, verbose=True)
-        # sch = StepLR(optimizer=opt, step_size=40, gamma=0.5, verbose=True)
+        if self.cfg.system.scheduler == 'plateau':
+            sch = ReduceLROnPlateau(optimizer=opt, mode='min', factor=0.5, verbose=True)
+        elif self.cfg.system.scheduler == 'step':
+            sch = StepLR(optimizer=opt, step_size=40, gamma=0.5, verbose=True)
         return [opt], [{"scheduler": sch, "interval": "epoch", 'frequency': 5, "monitor": "val_epoch_loss"}]
 
