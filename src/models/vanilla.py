@@ -21,24 +21,24 @@ class ConvNextExtractor(pl.LightningModule):
     def __init__(self, cfg):
         super().__init__()
         if cfg.model.size == 'tiny':
-            self.map_conv = convnext_tiny(weights=ConvNeXt_Tiny_Weights.DEFAULT)
-            self.map_conv.classifier[2] = nn.Identity()
-            self.pov_conv = convnext_tiny(weights=ConvNeXt_Tiny_Weights.DEFAULT)
-            self.pov_conv.classifier[2] = nn.Identity()
+            self.street_conv = convnext_tiny(weights=ConvNeXt_Tiny_Weights.DEFAULT)
+            self.street_conv.classifier[2] = nn.Identity()
+            self.sat_conv = convnext_tiny(weights=ConvNeXt_Tiny_Weights.DEFAULT)
+            self.sat_conv.classifier[2] = nn.Identity()
         elif cfg.model.size == 'base':
-            self.map_conv = convnext_base(weights=ConvNeXt_Base_Weights.DEFAULT)
-            self.map_conv.classifier[2] = nn.Identity()
-            self.pov_conv = convnext_base(weights=ConvNeXt_Base_Weights.DEFAULT)
-            self.pov_conv.classifier[2] = nn.Identity()
+            self.street_conv = convnext_base(weights=ConvNeXt_Base_Weights.DEFAULT)
+            self.street_conv.classifier[2] = nn.Identity()
+            self.sat_conv = convnext_base(weights=ConvNeXt_Base_Weights.DEFAULT)
+            self.sat_conv.classifier[2] = nn.Identity()
         
-    def embed_map(self, map_tile: torch.Tensor) -> torch.Tensor: 
-        return self.map_conv(map_tile)
+    def embed_street(self, pov_tile: torch.Tensor): 
+        return self.street_conv(pov_tile)
     
-    def embed_pov(self, pov_tile: torch.Tensor): 
-        image_features = self.pov_conv(pov_tile)
-        return image_features
+    def embed_sat(self, map_tile: torch.Tensor) -> torch.Tensor: 
+        return self.sat_conv(map_tile)
     
 
+    
 
 
 class Vanilla(pl.LightningModule):
@@ -72,14 +72,14 @@ class Vanilla(pl.LightningModule):
     def forward(self, street: torch.Tensor = None, sat: torch.Tensor = None, image: torch.Tensor = None, branch: str = 'streetview', stage: str = 'train'):
         if stage == 'test':
             if branch == 'streetview':
-                x = self.model.embed_pov(image)
+                x = self.model.embed_street(image)
             else:
-                x = self.model.embed_map(image)
+                x = self.model.embed_sat(image)
             x = F.normalize(x, p=2, dim=1)
             return x
     
-        street_out = self.model.embed_map(street)
-        sat_out = self.model.embed_pov(sat)
+        street_out = self.model.embed_street(street)
+        sat_out = self.model.embed_sat(sat)
         street_out = F.normalize(street_out, p=2, dim=1)
         sat_out = F.normalize(sat_out, p=2, dim=1)
         return street_out, sat_out
@@ -128,10 +128,9 @@ class Vanilla(pl.LightningModule):
         street, sat = batch['streetview'], batch['satellite']
         sat = sat.to(device)
         street = street.to(device)
-
         street_out, sat_out = self(street, sat)
 
-        # Selects negatives based on feature similarity
+        # Selects negatives based on feature similarity - update with sampler
         embs, anchors, positives, negatives = self.select_triplets(street_out, sat_out)
 
         loss = self.loss_func(embs, indices_tuple=(anchors, positives, negatives))
