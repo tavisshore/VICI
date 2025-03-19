@@ -1,11 +1,13 @@
 system:
   gpus: -1
   workers: 4
+  batch_size: 26
 
 data:
   root: '/home/shitbox/datasets/University-Release/'
   samearea: False
   augment: True
+  val_prop: 1.0
 
 model:
   selection: 'feat'

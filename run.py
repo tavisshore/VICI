@@ -15,7 +15,7 @@ debug = False
 epochs, devs = 1, 1
 wandb_logger = None
 if not debug:
-    epochs = 100
+    epochs = 200
     devs = 4
     wandb_logger = plg.WandbLogger(entity="UAVM", project="CVGL", save_dir=f'{cfg.system.path}/lightning_logs/', log_model=False,
                                    name='crossarea'

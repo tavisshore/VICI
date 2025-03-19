@@ -35,7 +35,6 @@ class University1652_CVGL(Dataset):
         self.cfg = cfg
         self.stage = stage
         self.root = Path(self.cfg.data.root) / stage if stage != 'val' else Path(self.cfg.data.root) / 'train'
-        proportion = 0.9
     
         self.transform = transforms.Compose([
             transforms.Resize((256, 256)),
@@ -87,9 +86,9 @@ class University1652_CVGL(Dataset):
                     self.image_pairs[id][i_s] = DotMap(streetview=s, satellite=satellite[0], pair=id, idx=i_s)
                     self.pair_keys.append(DotMap(pair=id, index=i_s))
             if stage == 'train':
-                self.pair_keys = self.pair_keys[:int(proportion*len(self.pair_keys))]
+                self.pair_keys = self.pair_keys[:int(self.cfg.data.val_prop*len(self.pair_keys))]
             elif stage == 'val':
-                self.pair_keys = self.pair_keys[int(proportion*len(self.pair_keys)):]
+                self.pair_keys = self.pair_keys[int(self.cfg.data.val_prop*len(self.pair_keys)):]
 
     def __len__(self):
         return len(self.pair_keys)

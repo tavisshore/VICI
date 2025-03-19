@@ -59,11 +59,11 @@ class Vanilla(pl.LightningModule):
 
     def train_dataloader(self):
         train_dataset = University1652_CVGL(self.cfg, stage='train')
-        return DataLoader(train_dataset, batch_size=16, num_workers=4, shuffle=True)
+        return DataLoader(train_dataset, batch_size=self.cfg.system.batch_size, num_workers=4, shuffle=True)
 
     def val_dataloader(self):
         val_dataset = University1652_CVGL(self.cfg, stage='val')
-        return DataLoader(val_dataset, batch_size=16, num_workers=4, shuffle=False)
+        return DataLoader(val_dataset, batch_size=self.cfg.system.batch_size, num_workers=4, shuffle=False)
     
     def test_dataloader(self):
         self.test_dataset = University1652_CVGL(self.cfg, stage='test')
@@ -232,6 +232,6 @@ class Vanilla(pl.LightningModule):
 
     def configure_optimizers(self):
         opt = torch.optim.AdamW(params=self.parameters(), lr=1e-4) #if self.hparams.gnn else torch.optim.AdamW(params=self.further_encoder.parameters(), lr=self.args.lr)
-        sch = ReduceLROnPlateau(optimizer=opt, mode='min', factor=0.66, patience=2, verbose=True)
+        sch = ReduceLROnPlateau(optimizer=opt, mode='min', factor=0.5, patience=2, verbose=True)
         return [opt], [{"scheduler": sch, "interval": "epoch", "monitor": "train_epoch_loss"}]
 
