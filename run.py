@@ -23,15 +23,16 @@ cfg.merge_from_file(f'{cfg.system.path}/config/{args["config"]}')
 cfg.merge_from_list(arglist)
 
 if not cfg.debug:
-    wandb_logger = plg.WandbLogger(entity="UAVM", project="CVGL", save_dir=f'{cfg.system.path}/lightning_logs/', log_model=False,
+    wandb_logger = plg.WandbLogger(entity="UAVM", project="CVGL", save_dir=f'{cfg.system.path}/results/lightning_logs/', log_model=False,
                                    name=cfg.exp_name)
     wandb_logger.log_hyperparams(cfg)
-    checkpoint_callback = ModelCheckpoint(monitor="val_epoch_loss", mode="min", dirpath=f'{cfg.system.path}/ckpts/', save_top_k=1,
+    checkpoint_callback = ModelCheckpoint(monitor="val_epoch_loss", mode="min", dirpath=f'{cfg.system.path}/results/ckpts/', save_top_k=1,
                                         filename='vanilla-{epoch:02d}-{val_epoch_loss:.6f}')
 else:
     cfg.system.batch_size = 5
     cfg.model.epochs, cfg.system.workers = 1, 1
     wandb_logger = None
+
 
 model = Vanilla(cfg)
 trainer = pl.Trainer(max_epochs=cfg.model.epochs, devices=cfg.system.workers, 
@@ -44,8 +45,5 @@ trainer = pl.Trainer(max_epochs=cfg.model.epochs, devices=cfg.system.workers,
 trainer.fit(model)
 # TODO: fix
 # model = Vanilla.load_from_checkpoint(checkpoint_callback.best_model_path)
-results_folder = trainer.test(model)
+trainer.test(model)
 
-# save config 
-# with open(f"{results_folder}/config.yaml", "w") as f:
-#   f.write(cfg.dump())

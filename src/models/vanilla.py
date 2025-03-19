@@ -203,9 +203,9 @@ class Vanilla(pl.LightningModule):
         folder = [f.name for f in Path(self.cfg.system.results_path).iterdir() if f.is_dir()]
         folder = [int(f) for f in folder if f.isdigit()]
         folder = max(folder) + 1 if folder else 0
-        folder = f'{self.cfg.system.results_path}/{folder}'
-        Path(folder).mkdir(parents=True, exist_ok=True)
-        answer_file = f'{folder}/answer.txt'
+        self.results_folder = f'{self.cfg.system.results_path}/{folder}'
+        Path(self.results_folder).mkdir(parents=True, exist_ok=True)
+        answer_file = f'{self.results_folder}/answer.txt'
         with open(answer_file, 'w') as f:
             for idx, sim in enumerate(similarity):
                 for s in sim[:10]:
@@ -213,17 +213,24 @@ class Vanilla(pl.LightningModule):
                 f.write("\n")
                 results_counter += 1
         # print(f'Number of Results: {results_counter}')
-        loczip = f'{folder}/answer.zip'
+        loczip = f'{self.results_folder}/answer.zip'
         zip = zipfile.ZipFile(loczip, "w", compression=zipfile.ZIP_STORED)
         zip.write (loczip)
         zip.close()
-        return folder
 
+        # Save config & model
+        self.trainer.save_checkpoint(f"{self.results_folder}/model.ckpt")
+        with open(f"{self.results_folder}/config.yaml", "w") as f:
+            f.write(self.cfg.dump())
+        
     def configure_optimizers(self):
         opt = torch.optim.AdamW(params=self.parameters(), lr=1e-4) #if self.hparams.gnn else torch.optim.AdamW(params=self.further_encoder.parameters(), lr=self.args.lr)
         if self.cfg.system.scheduler == 'plateau':
             sch = ReduceLROnPlateau(optimizer=opt, mode='min', factor=0.5, verbose=True)
+            return [opt], [{"scheduler": sch, "interval": "epoch", 'frequency': 5, "monitor": "val_epoch_loss"}]
         elif self.cfg.system.scheduler == 'step':
             sch = StepLR(optimizer=opt, step_size=40, gamma=0.5, verbose=True)
-        return [opt], [{"scheduler": sch, "interval": "epoch", 'frequency': 5, "monitor": "val_epoch_loss"}]
+            return [opt], [{"scheduler": sch, "interval": "epoch"}]
+        else:
+            return opt
 
