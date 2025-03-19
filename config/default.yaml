@@ -10,5 +10,5 @@ data:
   val_prop: 1.0
 
 model:
-  selection: 'feat'
+  selection: '' #feat
   size: 'tiny'
