@@ -1,6 +1,8 @@
 from yacs.config import CfgNode as CN
 from pathlib import Path
 
+
+
 _C = CN()
 _C.exp_name = 'exp_name'
 _C.debug = False
@@ -10,8 +12,8 @@ _C.system = CN()
 _C.system.gpus = -1
 _C.system.workers = 4
 _C.system.batch_size = 16
-_C.system.path = str(Path.cwd())
-_C.system.results_path = str(Path.cwd()) + '/results'
+_C.system.path = str(Path(__file__).parent.parent.resolve())
+_C.system.results_path = _C.system.path + '/results'
 
 _C.data = CN()
 _C.data.root = '/home/shitbox/datasets/University-Release/'

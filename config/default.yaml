@@ -14,4 +14,4 @@ data:
 model:
   selection: '' # feat, 
   size: 'tiny'
-  epochs: 100
+  epochs: 1

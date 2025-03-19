@@ -47,7 +47,7 @@ class University1652_CVGL(Dataset):
     def __init__(self, cfg, stage: str = 'train'):
         self.cfg = cfg
         self.stage = stage
-        self.root = Path(self.cfg.data.root) / stage if stage != 'val' else Path(self.cfg.data.root) / 'train'
+        self.root = Path(self.cfg.data.root) / stage if stage != 'val' else Path(self.cfg.data.root) / 'test'
     
         self.transform = transforms.Compose([
             transforms.Resize((256, 256)),
@@ -65,51 +65,66 @@ class University1652_CVGL(Dataset):
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
 
-        sat_stem = 'workshop_gallery_satellite' if stage == 'test' else 'satellite'
-        street_stem = 'workshop_query_street' if stage == 'test' else 'street'
         self.image_pairs = DotMap()
+        sat_counter, street_counter = 0, 0
 
-        if stage == 'test':
-            counter = 0
-            for id in (self.root / sat_stem).iterdir():
-                self.image_pairs[counter] = DotMap(satellite=id, name=id.stem)
-                counter += 1
-            for id in (self.root / street_stem).iterdir():
-                self.image_pairs[counter] = DotMap(streetview=id, name=id.stem)
-                counter += 1
-            self.pair_keys = list(self.image_pairs.keys())
-
-            my_file = open(f"{self.cfg.data.root}/test/query_street_name.txt", "r") 
-            data = my_file.read() 
-            self.test_order = data.split("\n") 
-            self.test_order = [x.split('.')[0] for x in self.test_order]
-            self.test_order = self.test_order[:-1]
-            my_file.close()
-        else:
-            self.satellite_path = self.root / sat_stem
+        # NOTE: Quite a lot of repetition here
+        if stage == 'train':
+            self.satellite_path = self.root / 'satellite'
             self.sub_dirs = [x.stem for x in self.satellite_path.iterdir() if x.is_dir()]
             
             # Validation references same as train or not - split before or after - better way?
             self.pair_keys = []
             for id in self.sub_dirs:
                 # 1 satellite, varying streetview - add sampling option to not bias
-                satellite = [x for x in (self.root / sat_stem / id).iterdir() if x.is_file()]
-                streetviews = [x for x in (self.root / street_stem / id).iterdir() if x.is_file()]
+                streetviews = [x for x in (self.root / 'street' / id).iterdir() if x.is_file()]
+                satellite = [x for x in (self.root / 'satellite' / id).iterdir() if x.is_file()]
                 self.image_pairs[id] = DotMap()
-
+                sat_counter += 1
                 for i_s, s in enumerate(streetviews):
                     self.image_pairs[id][i_s] = DotMap(streetview=s, satellite=satellite[0], pair=id, idx=i_s)
+                    street_counter += 1
 
                 # TODO: This dodgy bit of code simplifies sampling - evaluate now.
                     if not self.cfg.data.sample_equal: # Every possible image pair is a sample
                         self.pair_keys.append(DotMap(pair=id, index=i_s))
                 if self.cfg.data.sample_equal: # Only one image pair per satellite reference - randomly select streetview at runtime
                     self.pair_keys.append(DotMap(pair=id, index=list(range(len(streetviews)))))
+        elif stage == 'val':
+            self.satellite_path = self.root / 'query_satellite'
+            self.sub_dirs = [x.stem for x in self.satellite_path.iterdir() if x.is_dir()]
 
-            if stage == 'train':
-                self.pair_keys = self.pair_keys[:int(self.cfg.data.train_prop*len(self.pair_keys))]
-            elif stage == 'val':
-                self.pair_keys = self.pair_keys[int(self.cfg.data.train_prop*len(self.pair_keys)):]
+            self.pair_keys = []
+            for id in self.sub_dirs: # querys for each satellite
+                # 1 satellite, varying streetview - add sampling option to not bias
+                streetviews = [x for x in (self.root / 'query_street' / id).iterdir() if x.is_file()]
+                satellite = [x for x in (self.root / 'query_satellite' / id).iterdir() if x.is_file()]
+                self.image_pairs[id] = DotMap()
+                sat_counter += 1
+
+                for i_s, s in enumerate(streetviews):
+                    self.image_pairs[id][i_s] = DotMap(streetview=s, satellite=satellite[0], pair=id, idx=i_s)
+                    self.pair_keys.append(DotMap(pair=id, index=i_s))
+                    street_counter += 1
+        elif stage == 'test':
+            counter = 0
+            for id in (self.root / 'workshop_query_street').iterdir():
+                self.image_pairs[counter] = DotMap(streetview=id, name=id.stem)
+                counter += 1
+                street_counter += 1
+            for id in (self.root / 'workshop_gallery_satellite').iterdir():
+                self.image_pairs[counter] = DotMap(satellite=id, name=id.stem)
+                counter += 1
+                sat_counter += 1
+            self.pair_keys = list(self.image_pairs.keys())
+
+            my_file = open(f"{self.cfg.data.root}/test/query_street_name.txt", "r") # query_street_name - 2579? or query_label 2579?
+            data = my_file.read() 
+            self.test_order = data.split("\n") 
+            self.test_order = [x.split('.')[0] for x in self.test_order]
+            self.test_order = self.test_order[:-1]
+            my_file.close()
+        print(f'{stage} - streetview: {street_counter}, satellite: {sat_counter}\n')
 
     def __len__(self):
         return len(self.pair_keys)

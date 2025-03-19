@@ -84,64 +84,38 @@ class Vanilla(pl.LightningModule):
         sat_out = F.normalize(sat_out, p=2, dim=1)
         return street_out, sat_out
 
-    def select_triplets(self, street: torch.Tensor, sat: torch.Tensor, labels: torch.Tensor):
+    def exhaustive_triplets(self, street: torch.Tensor, sat: torch.Tensor, labels: torch.Tensor):
         """
         Triplet sampling methods - update once dataset sampler implemented
         """
         embeddings = torch.cat((street.float(), sat.float()), dim=0)
         batch_size = street.shape[0]
 
-        if self.cfg.model.selection == 'feat':
-            # Select triplets based on feature similarity - most dissimilar sat is negative
-            similarity = torch.nn.functional.cosine_similarity(street.unsqueeze(1), sat.unsqueeze(0), dim=2)
-            # Get top 3 most dissimilar (lowest similarity) indices
-            negatives = torch.topk(similarity, 3, largest=False, dim=1).indices 
+        oppose = batch_size - 1
+        anchors = torch.arange(batch_size).repeat_interleave(oppose)
+        positives = torch.arange(batch_size, 2 * batch_size).repeat_interleave(oppose)
+        negatives = torch.stack([
+            torch.cat((torch.arange(i), torch.arange(i + 1, batch_size)))
+            for i in range(batch_size)
+        ]).reshape(batch_size, -1)[:, :oppose].flatten()
 
-            anchors, positives, ns = [], [], []
-            for idx, neg in enumerate(negatives):
-                neg = neg[neg != idx]
-                neg = neg.tolist()
-                for n in neg:
-                    anchors.append(idx), positives.append(idx+batch_size), ns.append(n+batch_size)
-
-            anchors = torch.tensor(anchors, device=device)
-            positives = torch.tensor(positives, device=device)
-            negatives = torch.tensor(ns, device=device)
-            return embeddings, anchors, positives, negatives
-        else: # for each sample, select all other samples as negatives unless they are the same class
-            oppose = batch_size - 1
-            anchors = torch.arange(batch_size).repeat_interleave(oppose)
-            positives = torch.arange(batch_size, 2 * batch_size).repeat_interleave(oppose)
-            negatives = torch.stack([
-                torch.cat((torch.arange(i), torch.arange(i + 1, batch_size)))
-                for i in range(batch_size)
-            ]).reshape(batch_size, -1)[:, :oppose].flatten()
-
-            label_tensor = torch.tensor([hash(label) for label in labels])  
-            mask = label_tensor[anchors] != label_tensor[negatives]
-            anchors, positives, negatives = anchors[mask], positives[mask], negatives[mask]
-            anchors, positives, negatives = anchors.to(device), positives.to(device), negatives.to(device)
-            negatives += batch_size
-
-            # anchors = torch.arange(0, emb_length)
-            # positives = torch.arange(emb_length, emb_length*2)
-            # negatives = torch.add(torch.randint(0, emb_length, (emb_length,)), emb_length)#.repeat_interleave(self.hparams['args'].walk)
-            # while torch.any(negatives == torch.arange(emb_length, emb_length*2)):
-            #     negatives = torch.add(torch.randint(0, emb_length, (emb_length,)), emb_length)
-
-            return embeddings, anchors, positives, negatives
+        label_tensor = torch.tensor([hash(label) for label in labels])  
+        mask = label_tensor[anchors] != label_tensor[negatives]
+        anchors, positives, negatives = anchors[mask], positives[mask], negatives[mask]
+        anchors, positives, negatives = anchors.to(device), positives.to(device), negatives.to(device)
+        negatives += batch_size
+        return embeddings, anchors, positives, negatives
 
     def training_step(self, batch, batch_idx):
         street, sat = batch['streetview'], batch['satellite']
         labels = batch['label']
         sat = sat.to(device)
         street = street.to(device)
+
         street_out, sat_out = self(street, sat)
-
-        # Selects negatives based on feature similarity - update with sampler
-        embs, anchors, positives, negatives = self.select_triplets(street_out, sat_out, labels)
-
+        embs, anchors, positives, negatives = self.exhaustive_triplets(street_out, sat_out, labels)
         loss = self.loss_func(embs, indices_tuple=(anchors, positives, negatives))
+
         self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True, sync_dist=True, batch_size=street.shape[0])
         self.train_loss.append(loss) 
 
@@ -172,8 +146,8 @@ class Vanilla(pl.LightningModule):
         street = street.to(device)
 
         street_out, sat_out = self(street, sat)
-
         loss = self.mse(street_out, sat_out)
+
         self.log('val_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True, sync_dist=True, batch_size=street.shape[0])
         self.val_loss.append(loss)
 
@@ -208,7 +182,10 @@ class Vanilla(pl.LightningModule):
 
     def on_test_epoch_end(self):
         # Get top-10 retrievals for each streetview image and save names to file
-        streetview_keys = list(self.test_outputs['streetview'].keys()) # Orders test outputs by dataset.test_order
+        # streetview_keys = list(self.test_outputs['streetview'].keys()) # Orders test outputs by dataset.test_order
+        # Should be 7737 values at the end
+        streetview_keys = self.test_dataset.test_order
+        print(f'ordered length: {len(streetview_keys)}')
         streetview_embeddings = [self.test_outputs['streetview'][x] for x in streetview_keys]
         satellite_keys = list(self.test_outputs['satellite'].keys())
         satellite_embeddings = [self.test_outputs['satellite'][x] for x in satellite_keys]
@@ -217,10 +194,14 @@ class Vanilla(pl.LightningModule):
         satellite = np.concatenate(satellite_embeddings)
 
         # Calculate cosine similarity between streetview and satellite embeddings
+        print(f'input shapes: {streetview.shape}, {satellite.shape}')
         similarity = np.dot(streetview, satellite.T)
         similarity = np.argsort(similarity, axis=1)
 
+        print(f'\nSim Shape: {similarity.shape}\n')
+
         # check highest numbered folder in self.cfg.system.results_path
+        results_counter = 0
         folder = [f.name for f in Path(self.cfg.system.results_path).iterdir() if f.is_dir()]
         folder = [int(f) for f in folder if f.isdigit()]
         folder = max(folder) + 1 if folder else 0
@@ -232,7 +213,8 @@ class Vanilla(pl.LightningModule):
                 for s in sim[:10]:
                     f.write(f"{satellite_keys[s]}\t")
                 f.write("\n")
-        
+                results_counter += 1
+        print(f'Number of Results: {results_counter}')
         loczip = f'{folder}/answer.zip'
         zip = zipfile.ZipFile(loczip, "w", compression=zipfile.ZIP_STORED)
         zip.write (loczip)

@@ -19,7 +19,7 @@ for key, value in list(args.items()):
         arglist.append(key), arglist.append(value) 
 
 cfg = get_cfg_defaults()
-cfg.merge_from_file(f'config/{args["config"]}')
+cfg.merge_from_file(f'{cfg.system.path}/config/{args["config"]}')
 cfg.merge_from_list(arglist)
 
 if not cfg.debug:
