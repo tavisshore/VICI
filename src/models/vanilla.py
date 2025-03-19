@@ -94,7 +94,6 @@ class Vanilla(pl.LightningModule):
         if self.cfg.model.selection == 'feat':
             # Select triplets based on feature similarity - most dissimilar sat is negative
             similarity = torch.nn.functional.cosine_similarity(street.unsqueeze(1), sat.unsqueeze(0), dim=2)
-            
             # Get top 3 most dissimilar (lowest similarity) indices
             negatives = torch.topk(similarity, 3, largest=False, dim=1).indices 
 
@@ -103,27 +102,32 @@ class Vanilla(pl.LightningModule):
                 neg = neg[neg != idx]
                 neg = neg.tolist()
                 for n in neg:
-                    anchors.append(idx)
-                    positives.append(idx+batch_size)
-                    ns.append(n+batch_size)
+                    anchors.append(idx), positives.append(idx+batch_size), ns.append(n+batch_size)
 
             anchors = torch.tensor(anchors, device=device)
             positives = torch.tensor(positives, device=device)
             negatives = torch.tensor(ns, device=device)
             return embeddings, anchors, positives, negatives
-        else:
-            # for each sample, select all other samples as negatives unless they are the same class
-            anchors = torch.arange(batch_size).repeat_interleave(2)
-            positives = torch.arange(batch_size, 2 * batch_size).repeat_interleave(2)
+        else: # for each sample, select all other samples as negatives unless they are the same class
+            oppose = batch_size - 1
+            anchors = torch.arange(batch_size).repeat_interleave(oppose)
+            positives = torch.arange(batch_size, 2 * batch_size).repeat_interleave(oppose)
             negatives = torch.stack([
                 torch.cat((torch.arange(i), torch.arange(i + 1, batch_size)))
                 for i in range(batch_size)
-            ]).reshape(batch_size, -1)[:, :2].flatten()
+            ]).reshape(batch_size, -1)[:, :oppose].flatten()
 
             label_tensor = torch.tensor([hash(label) for label in labels])  
             mask = label_tensor[anchors] != label_tensor[negatives]
             anchors, positives, negatives = anchors[mask], positives[mask], negatives[mask]
             anchors, positives, negatives = anchors.to(device), positives.to(device), negatives.to(device)
+            negatives += batch_size
+
+            # anchors = torch.arange(0, emb_length)
+            # positives = torch.arange(emb_length, emb_length*2)
+            # negatives = torch.add(torch.randint(0, emb_length, (emb_length,)), emb_length)#.repeat_interleave(self.hparams['args'].walk)
+            # while torch.any(negatives == torch.arange(emb_length, emb_length*2)):
+            #     negatives = torch.add(torch.randint(0, emb_length, (emb_length,)), emb_length)
 
             return embeddings, anchors, positives, negatives
 

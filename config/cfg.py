@@ -23,7 +23,7 @@ _C.data.sample_equal = True
 _C.model = CN()
 _C.model.selection = 'feat'
 _C.model.size = 'tiny'
-_C.model.epochs = 200
+_C.model.epochs = 100
 
 
 def get_cfg_defaults():

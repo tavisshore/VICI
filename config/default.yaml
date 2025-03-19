@@ -12,5 +12,6 @@ data:
   sample_equal: True
 
 model:
-  selection: '' #feat
+  selection: '' # feat, 
   size: 'tiny'
+  epochs: 100
