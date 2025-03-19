@@ -1,4 +1,4 @@
-exp_name: 'default'
+exp_name: 'tiny'
 system:
   gpus: -1
   workers: 4
@@ -11,6 +11,12 @@ data:
   sample_equal: True
 
 model:
-  selection: '' # feat, 
   size: 'tiny'
   epochs: 100
+  head: 
+    use: False
+    params:
+      inter_dims: 768
+      hidden_dims: 768
+      output_dims: 768
+
