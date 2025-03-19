@@ -12,7 +12,7 @@ data:
 
 model:
   size: 'tiny'
-  epochs: 10
+  epochs: 200
   head: 
     use: False
     params:
