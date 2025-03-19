@@ -24,6 +24,7 @@ cfg.merge_from_file(f'{cfg.system.path}/config/{args["config"]}')
 cfg.merge_from_list(arglist)
 cfg.system.results_path = results_dir(cfg)
 
+
 if not cfg.debug:
     wandb_logger = plg.WandbLogger(entity="UAVM", project="CVGL", save_dir=f'{cfg.system.results_path}/', log_model=False,
                                    name=cfg.exp_name)
