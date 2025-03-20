@@ -5,7 +5,7 @@ from torch import nn
 from torch.utils.data import DataLoader
 import lightning.pytorch as pl
 from torchvision.models import convnext_tiny, ConvNeXt_Tiny_Weights, convnext_base, ConvNeXt_Base_Weights
-from pytorch_metric_learning import losses
+from pytorch_metric_learning import losses, miners
 from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR
 from torch.nn import functional as F
 import zipfile
@@ -135,6 +135,14 @@ class Vanilla(pl.LightningModule):
 
         self.loss_func = losses.NTXentLoss()
         self.mse = nn.MSELoss()
+
+        self.miner = None
+
+        if cfg.model.miner == 'hard':
+            self.miner_func = miners.BatchEasyHardMiner(
+                pos_strategy='hard', 
+                neg_strategy='hard'
+                )
         
         self.train_loss, self.val_loss, self.test_loss = [], [], []
         self.train_query, self.train_ref = [], []
@@ -195,7 +203,12 @@ class Vanilla(pl.LightningModule):
 
         street_out, sat_out = self(street, sat)
         embs, anchors, positives, negatives = self.exhaustive_triplets(street_out, sat_out, labels)
-        loss = self.loss_func(embs, indices_tuple=(anchors, positives, negatives))
+
+        if self.miner != None:
+            miner_output = self.miner_func(embs, labels)
+            loss = self.loss_func(embs, indices_tuple=miner_output)
+        else:
+            loss = self.loss_func(embs, indices_tuple=(anchors, positives, negatives))
 
         self.log('train_loss', loss, on_step=True, prog_bar=True, logger=True, sync_dist=True, batch_size=street.shape[0])
         self.train_loss.append(loss) 
