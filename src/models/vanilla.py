@@ -54,6 +54,36 @@ class ProjectionHead(nn.Module):
         x = self.layers(x)
         return x
 
+class SharedConvNextExtractor(pl.LightningModule):
+    def __init__(self, cfg):
+        super().__init__()
+        self.cfg = cfg
+        if cfg.model.size == 'tiny':
+            self.shared_conv = convnext_tiny(weights=ConvNeXt_Tiny_Weights.DEFAULT)
+            self.shared_conv.classifier[2] = nn.Identity()
+            if cfg.model.head.use:
+                assert self.cfg.mode.head.params.inter_dims == 768, f"Inter dims should be 768 for tiny model, but got {self.cfg.mode.head.params.inter_dims}"
+        elif cfg.model.size == 'base':
+            self.shared_conv = convnext_base(weights=ConvNeXt_Base_Weights.DEFAULT)
+            self.shared_conv.classifier[2] = nn.Identity()
+            if cfg.model.head.use:
+                assert self.cfg.mode.head.params.inter_dims == 1024, f"Inter dims should be 1024 for base model, but got {self.cfg.mode.head.params.inter_dims}"
+
+        # Add projection head
+        if cfg.model.head.use:
+            self.proj_head = ProjectionHead(cfg.mode.head.params.inter_dims, cfg.mode.head.params.hidden_dims, cfg.mode.head.params.output_dims)
+        
+    def embed_street(self, pov_tile: torch.Tensor) -> torch.Tensor: 
+        x = self.shared_conv(pov_tile)
+        if self.cfg.model.head.use:
+            x = self.proj_head(x)
+        return x
+    
+    def embed_sat(self, map_tile: torch.Tensor) -> torch.Tensor: 
+        x = self.shared_conv(map_tile)
+        if self.cfg.model.head.use:
+            x = self.proj_head(x)
+        return x
 
 class ConvNextExtractor(pl.LightningModule):
     def __init__(self, cfg):
@@ -79,7 +109,7 @@ class ConvNextExtractor(pl.LightningModule):
             self.street_head = ProjectionHead(cfg.mode.head.params.inter_dims, cfg.mode.head.params.hidden_dims, cfg.mode.head.params.output_dims)
             self.sat_head = ProjectionHead(cfg.mode.head.params.inter_dims, cfg.mode.head.params.hidden_dims, cfg.mode.head.params.output_dims)
         
-    def embed_street(self, pov_tile: torch.Tensor): 
+    def embed_street(self, pov_tile: torch.Tensor) -> torch.Tensor: 
         x = self.street_conv(pov_tile)
         if self.cfg.model.head.use:
             x = self.street_head(x)
@@ -97,7 +127,10 @@ class Vanilla(pl.LightningModule):
         super(Vanilla, self).__init__()
         self.cfg = cfg
 
-        self.model = ConvNextExtractor(cfg)
+        if cfg.model.shared_extractor:
+            self.model = SharedConvNextExtractor(cfg)
+        else:
+            self.model = ConvNextExtractor(cfg)
         self.model.to(device)
 
         self.loss_func = losses.NTXentLoss()
