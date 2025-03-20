@@ -4,7 +4,8 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 import lightning.pytorch as pl
-from torchvision.models import convnext_tiny, ConvNeXt_Tiny_Weights, convnext_base, ConvNeXt_Base_Weights
+# from torchvision.models import convnext_tiny, ConvNeXt_Tiny_Weights, convnext_base, ConvNeXt_Base_Weights
+import timm 
 from pytorch_metric_learning import losses
 from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR
 from torch.nn import functional as F
@@ -59,21 +60,17 @@ class ConvNextExtractor(pl.LightningModule):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
-        if cfg.model.size == 'tiny':
-            self.street_conv = convnext_tiny(weights=ConvNeXt_Tiny_Weights.DEFAULT)
-            self.street_conv.classifier[2] = nn.Identity()
-            self.sat_conv = convnext_tiny(weights=ConvNeXt_Tiny_Weights.DEFAULT)
-            self.sat_conv.classifier[2] = nn.Identity()
-            if cfg.model.head.use:
-                assert self.cfg.mode.head.params.inter_dims == 768, f"Inter dims should be 768 for tiny model, but got {self.cfg.mode.head.params.inter_dims}"
-        elif cfg.model.size == 'base':
-            self.street_conv = convnext_base(weights=ConvNeXt_Base_Weights.DEFAULT)
-            self.street_conv.classifier[2] = nn.Identity()
-            self.sat_conv = convnext_base(weights=ConvNeXt_Base_Weights.DEFAULT)
-            self.sat_conv.classifier[2] = nn.Identity()
-            if cfg.model.head.use:
-                assert self.cfg.mode.head.params.inter_dims == 1024, f"Inter dims should be 1024 for base model, but got {self.cfg.mode.head.params.inter_dims}"
+        if cfg.model.backbone == 'convnext':
+            self.street_conv = timm.create_model(f'convnext_{cfg.model.size}_384_in22ft1k', pretrained=True, num_classes=0)
+            self.sat_conv = timm.create_model(f'convnext_{cfg.model.size}_384_in22ft1k', pretrained=True, num_classes=0)
+        elif cfg.model.backbone == 'dinov2':
+            self.street_conv = timm.create_model(f'timm/vit_small_patch14_dinov2.lvd142m', pretrained=True, num_classes=0)
+            self.sat_conv = timm.create_model(f'timm/vit_small_patch14_dinov2.lvd142m', pretrained=True, num_classes=0)
+        self.data_config = timm.data.resolve_model_data_config(self.street_conv)
 
+            # if cfg.model.head.use:
+                # assert self.cfg.mode.head.params.inter_dims == 768 if cfg.model.size == 'tiny' else 1024, f"Inter dims should be 768 for tiny model, but got {self.cfg.mode.head.params.inter_dims}"
+            
         # Add projection head
         if cfg.model.head.use:
             self.street_head = ProjectionHead(cfg.mode.head.params.inter_dims, cfg.mode.head.params.hidden_dims, cfg.mode.head.params.output_dims)
@@ -109,15 +106,15 @@ class Vanilla(pl.LightningModule):
         self.test_outputs = DotMap(streetview=DotMap(), satellite=DotMap())
 
     def train_dataloader(self):
-        train_dataset = University1652_CVGL(self.cfg, stage='train')
+        train_dataset = University1652_CVGL(self.cfg, stage='train', data_config=self.model.data_config)
         return DataLoader(train_dataset, batch_size=self.cfg.system.batch_size, num_workers=4, shuffle=True)
 
     def val_dataloader(self):
-        val_dataset = University1652_CVGL(self.cfg, stage='val')
+        val_dataset = University1652_CVGL(self.cfg, stage='val', data_config=self.model.data_config)
         return DataLoader(val_dataset, batch_size=self.cfg.system.batch_size, num_workers=4, shuffle=False)
     
     def test_dataloader(self):
-        self.test_dataset = University1652_CVGL(self.cfg, stage='test')
+        self.test_dataset = University1652_CVGL(self.cfg, stage='test', data_config=self.model.data_config)
         return DataLoader(self.test_dataset, batch_size=1, num_workers=4, shuffle=False)
     
     def forward(self, street: torch.Tensor = None, sat: torch.Tensor = None, image: torch.Tensor = None, branch: str = 'streetview', stage: str = 'train'):
@@ -213,7 +210,9 @@ class Vanilla(pl.LightningModule):
         mean_val_1_10 = torch.stack([self.trainer.callback_metrics[f'val_{i}'] for i in [1, 10]]).mean()
         self.log('val_mean', mean_val_1_10, on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
         self.val_loss, self.val_query, self.val_ref = [], [], []
-        return
+
+        current_lr = self.trainer.optimizers[0].param_groups[0]['lr']
+        self.log('current_lr', current_lr, on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
     
     def test_step(self, batch, batch_idx):
         batch_keys = batch.keys()
@@ -239,8 +238,11 @@ class Vanilla(pl.LightningModule):
 
         # Calculate cosine similarity between streetview and satellite embeddings
         # print(f'input shapes: {streetview.shape}, {satellite.shape}')
+        print(f'shapes 1: {streetview.shape}, {satellite.shape}')
         similarity = np.dot(streetview, satellite.T)
+        print(f'similarity shape: {similarity.shape}')
         similarity = np.argsort(similarity, axis=1)
+        print(f'similarity shape: {similarity.shape}')
 
         # print(f'\nSim Shape: {similarity.shape}\n')
 
@@ -267,10 +269,10 @@ class Vanilla(pl.LightningModule):
     def configure_optimizers(self):
         opt = torch.optim.AdamW(params=self.parameters(), lr=1e-4) 
         if self.cfg.system.scheduler == 'plateau':
-            sch = ReduceLROnPlateau(optimizer=opt, mode='min', factor=0.5, verbose=True)
+            sch = ReduceLROnPlateau(optimizer=opt, mode='min', factor=0.5)
             return [opt], [{"scheduler": sch, "interval": "epoch", 'frequency': 5, "monitor": "val_loss_epoch"}]
         elif self.cfg.system.scheduler == 'step':
-            sch = StepLR(optimizer=opt, step_size=40, gamma=0.5, verbose=True)
+            sch = StepLR(optimizer=opt, step_size=40, gamma=0.5)
             return [opt], [{"scheduler": sch, "interval": "epoch"}]
         else:
             return opt

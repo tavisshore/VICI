@@ -2,7 +2,6 @@ exp_name: 'tiny'
 system:
   gpus: -1
   workers: 4
-  batch_size: 26
 
 data:
   root: '/home/shitbox/datasets/University-Release/'
@@ -10,13 +9,8 @@ data:
   augment: True
   sample_equal: True
 
-model:
-  size: 'tiny'
-  epochs: 200
-  head: 
-    use: False
-    params:
-      inter_dims: 768
-      hidden_dims: 512
-      output_dims: 512
+# model:
+#   backbone: 'convnext'
+#   size: 'tiny'
+#   epochs: 200
 
