@@ -35,8 +35,8 @@ else:
     cfg.model.epochs, cfg.system.workers = 25, 1
     wandb_logger = None
 
-checkpoint_callback = ModelCheckpoint(monitor="val_1", mode="max", dirpath=f'{cfg.system.results_path}/ckpts/', save_top_k=1,
-                                      filename='{epoch}-{val_1:.2f}')
+checkpoint_callback = ModelCheckpoint(monitor="val_mean", mode="max", dirpath=f'{cfg.system.results_path}/ckpts/', save_top_k=1,
+                                      filename='{epoch}-{val_mean:.2f}')
 
 model = Vanilla(cfg)
 trainer = pl.Trainer(max_epochs=cfg.model.epochs, devices=cfg.system.workers, 

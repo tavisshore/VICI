@@ -17,6 +17,6 @@ model:
     use: False
     params:
       inter_dims: 768
-      hidden_dims: 768
-      output_dims: 768
+      hidden_dims: 512
+      output_dims: 512
 

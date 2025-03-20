@@ -175,16 +175,13 @@ class Vanilla(pl.LightningModule):
     
     def on_train_epoch_end(self):
         avg_loss = torch.stack([x for x in self.train_loss]).mean()
-        self.log('train_epoch_loss', avg_loss, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
-        self.train_loss = []
+        self.log('train_loss_epoch', avg_loss, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
 
         query = np.concatenate(self.train_query, axis=0)
         ref = np.concatenate(self.train_ref, axis=0)
         metrics = recall_accuracy(query, ref)
-        self.log('train_1', metrics[1], on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
-        self.log('train_5', metrics[5], on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
-        self.log('train_10', metrics[10], on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
-        self.train_query, self.train_ref = [], []
+        for i in [1, 5, 10]: self.log(f'train_{i}', metrics[i], on_epoch=True, prog_bar=False, logger=True, sync_dist=True) 
+        self.train_loss, self.train_query, self.train_ref = [], [], []
         return avg_loss
     
     def validation_step(self, batch, batch_idx):
@@ -206,16 +203,16 @@ class Vanilla(pl.LightningModule):
     
     def on_validation_epoch_end(self):
         avg_loss = torch.stack([x for x in self.val_loss]).mean()
-        self.log('val_epoch_loss', avg_loss, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
-        self.val_loss = []
+        self.log('val_loss_epoch', avg_loss, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
 
         query = np.concatenate(self.val_query, axis=0)
         ref = np.concatenate(self.val_ref, axis=0)
         metrics = recall_accuracy(query, ref)
-        self.log('val_1', metrics[1], on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
-        self.log('val_5', metrics[5], on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
-        self.log('val_10', metrics[10], on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
-        self.val_query, self.val_ref = [], []
+        for i in [1, 5, 10]: self.log(f'val_{i}', metrics[i], on_epoch=True, prog_bar=False, logger=True, sync_dist=True) 
+
+        mean_val_1_10 = torch.stack([self.trainer.callback_metrics[f'val_{i}'] for i in [1, 10]]).mean()
+        self.log('val_mean', mean_val_1_10, on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
+        self.val_loss, self.val_query, self.val_ref = [], [], []
         return
     
     def test_step(self, batch, batch_idx):
@@ -229,9 +226,9 @@ class Vanilla(pl.LightningModule):
 
     def on_test_epoch_end(self):
         # Get top-10 retrievals for each streetview image and save names to file
-        streetview_keys = list(self.test_outputs['streetview'].keys()) 
+        # streetview_keys = list(self.test_outputs['streetview'].keys()) 
         # Should be 7737 values at the end
-        # streetview_keys = self.test_dataset.test_order
+        streetview_keys = self.test_dataset.test_order
         # print(f'ordered length: {len(streetview_keys)}')
         streetview_embeddings = [self.test_outputs['streetview'][x] for x in streetview_keys]
         satellite_keys = list(self.test_outputs['satellite'].keys())
@@ -268,10 +265,10 @@ class Vanilla(pl.LightningModule):
             f.write(self.cfg.dump())
         
     def configure_optimizers(self):
-        opt = torch.optim.AdamW(params=self.parameters(), lr=1e-4) #if self.hparams.gnn else torch.optim.AdamW(params=self.further_encoder.parameters(), lr=self.args.lr)
+        opt = torch.optim.AdamW(params=self.parameters(), lr=1e-4) 
         if self.cfg.system.scheduler == 'plateau':
             sch = ReduceLROnPlateau(optimizer=opt, mode='min', factor=0.5, verbose=True)
-            return [opt], [{"scheduler": sch, "interval": "epoch", 'frequency': 5, "monitor": "val_epoch_loss"}]
+            return [opt], [{"scheduler": sch, "interval": "epoch", 'frequency': 5, "monitor": "val_loss_epoch"}]
         elif self.cfg.system.scheduler == 'step':
             sch = StepLR(optimizer=opt, step_size=40, gamma=0.5, verbose=True)
             return [opt], [{"scheduler": sch, "interval": "epoch"}]

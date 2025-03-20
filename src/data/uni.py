@@ -90,7 +90,7 @@ class University1652_CVGL(Dataset):
                         self.pair_keys.append(DotMap(pair=id, index=i_s))
                 if self.cfg.data.sample_equal: # Only one image pair per satellite reference - randomly select streetview at runtime
                     self.pair_keys.append(DotMap(pair=id, index=list(range(len(streetviews)))))
-        elif stage == 'val':
+        elif stage == 'test' or stage == 'val':
             self.satellite_path = self.root / 'query_satellite'
             self.sub_dirs = [x.stem for x in self.satellite_path.iterdir() if x.is_dir()]
 
@@ -106,7 +106,7 @@ class University1652_CVGL(Dataset):
                     self.image_pairs[id][i_s] = DotMap(streetview=s, satellite=satellite[0], pair=id, idx=i_s)
                     self.pair_keys.append(DotMap(pair=id, index=i_s))
                     street_counter += 1
-        elif stage == 'test':
+        elif stage == 'teasdoinst':
             counter = 0
             for id in (self.root / 'workshop_query_street').iterdir():
                 self.image_pairs[counter] = DotMap(streetview=id, name=id.stem)
