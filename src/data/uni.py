@@ -49,24 +49,7 @@ class University1652_CVGL(Dataset):
         self.cfg = cfg
         self.stage = stage
         self.root = Path(self.cfg.data.root) / stage if stage != 'val' else Path(self.cfg.data.root) / 'test'
-
-        # to albumentations
-        # self.transform = transforms.Compose([
-        #     transforms.Resize((self.cfg.model.input_size, self.cfg.model.input_size)),
-        #     transforms.ToTensor(),
-        #     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),            
-        # ])
-
-        # self.augment = transforms.Compose([
-        #     transforms.RandomHorizontalFlip(),
-        #     transforms.RandomVerticalFlip(),
-        #     transforms.RandomRotation(15),
-        #     transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1),
-        #     transforms.RandomResizedCrop(self.cfg.model.input_size, scale=(0.8, 1.0)),
-        #     transforms.ToTensor(),
-        #     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        # ])
-
+        
         self.transform = timm.data.create_transform(**data_config, is_training=True if stage == 'train' else False)
 
         self.image_pairs = DotMap()
@@ -128,7 +111,7 @@ class University1652_CVGL(Dataset):
             self.test_order = [x.split('.')[0] for x in self.test_order]
             self.test_order = self.test_order[:-1]
             my_file.close()
-        # print(f'{stage} - streetview: {street_counter}, satellite: {sat_counter}\n')
+        print(f'{stage} - streetview: {street_counter}, satellite: {sat_counter}\n')
 
     def __len__(self):
         return len(self.pair_keys)

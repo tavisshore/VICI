@@ -61,16 +61,20 @@ class ConvNextExtractor(pl.LightningModule):
         super().__init__()
         self.cfg = cfg
         if cfg.model.backbone == 'convnext':
-            self.street_conv = timm.create_model(f'convnext_{cfg.model.size}_384_in22ft1k', pretrained=True, num_classes=0)
-            self.sat_conv = timm.create_model(f'convnext_{cfg.model.size}_384_in22ft1k', pretrained=True, num_classes=0)
+            self.street_conv = timm.create_model(f'convnext_{cfg.model.size}.fb_in22k_ft_in1k_384', pretrained=True, num_classes=0)
+            self.sat_conv = timm.create_model(f'convnext_{cfg.model.size}.fb_in22k_ft_in1k_384', pretrained=True, num_classes=0)
         elif cfg.model.backbone == 'dinov2':
             self.street_conv = timm.create_model(f'timm/vit_small_patch14_dinov2.lvd142m', pretrained=True, num_classes=0)
             self.sat_conv = timm.create_model(f'timm/vit_small_patch14_dinov2.lvd142m', pretrained=True, num_classes=0)
-        self.data_config = timm.data.resolve_model_data_config(self.street_conv)
+        elif cfg.model.backbone == 'vit':
+            self.street_conv = timm.create_model(f'timm/vit_base_patch16_siglip_512.v2_webli', pretrained=True, num_classes=0)
+            self.sat_conv = timm.create_model(f'timm/vit_base_patch16_siglip_512.v2_webli', pretrained=True, num_classes=0)
 
-            # if cfg.model.head.use:
-                # assert self.cfg.mode.head.params.inter_dims == 768 if cfg.model.size == 'tiny' else 1024, f"Inter dims should be 768 for tiny model, but got {self.cfg.mode.head.params.inter_dims}"
-            
+        self.data_config = timm.data.resolve_model_data_config(self.street_conv)
+        # Get dims from this config?
+        # if cfg.model.head.use:
+            # assert self.cfg.mode.head.params.inter_dims == 768 if cfg.model.size == 'tiny' else 1024, f"Inter dims should be 768 for tiny model, but got {self.cfg.mode.head.params.inter_dims}"
+
         # Add projection head
         if cfg.model.head.use:
             self.street_head = ProjectionHead(cfg.mode.head.params.inter_dims, cfg.mode.head.params.hidden_dims, cfg.mode.head.params.output_dims)
@@ -211,7 +215,7 @@ class Vanilla(pl.LightningModule):
         self.log('val_mean', mean_val_1_10, on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
         self.val_loss, self.val_query, self.val_ref = [], [], []
 
-        current_lr = self.trainer.optimizers[0].param_groups[0]['lr']
+        current_lr = self.trainer.lr_scheduler_configs[0].scheduler.get_last_lr()[0]
         self.log('current_lr', current_lr, on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
     
     def test_step(self, batch, batch_idx):

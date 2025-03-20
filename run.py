@@ -9,8 +9,6 @@ from src.utils import results_dir
 pl.seed_everything(42)
 
 args = argparse.ArgumentParser()
-args.add_argument('--config', type=str, default='default.yaml')
-args.add_argument('--exp_name', type=str, default='dev_1')
 args.add_argument('--debug', action='store_true')
 args = vars(args.parse_args())
 
@@ -32,14 +30,14 @@ if not cfg.debug:
     wandb_logger.log_hyperparams(cfg)
 else:
     cfg.system.batch_size = 8
-    cfg.model.epochs, cfg.system.workers = 25, 1
+    cfg.model.epochs, cfg.system.gpus = 25, 1
     wandb_logger = None
 
 checkpoint_callback = ModelCheckpoint(monitor="val_mean", mode="max", dirpath=f'{cfg.system.results_path}/ckpts/', save_top_k=1,
                                       filename='{epoch}-{val_mean:.2f}')
 
 model = Vanilla(cfg)
-trainer = pl.Trainer(max_epochs=cfg.model.epochs, devices=cfg.system.workers, 
+trainer = pl.Trainer(max_epochs=cfg.model.epochs, devices=cfg.system.gpus, 
                      logger=wandb_logger if not cfg.debug else None,
                      callbacks=[checkpoint_callback],
                      check_val_every_n_epoch=4,
@@ -47,6 +45,7 @@ trainer = pl.Trainer(max_epochs=cfg.model.epochs, devices=cfg.system.workers,
                      num_sanity_val_steps=0,
                      default_root_dir=cfg.system.results_path)
 trainer.fit(model)
-trainer = pl.Trainer(devices=1, logger=wandb_logger if not cfg.debug else None, default_root_dir=cfg.system.results_path)
+
+trainer = pl.Trainer(devices=1, default_root_dir=cfg.system.results_path)
 trainer.test(model, ckpt_path=checkpoint_callback.best_model_path)
 

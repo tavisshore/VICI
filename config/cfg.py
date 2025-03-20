@@ -15,7 +15,7 @@ _C.system.workers = 4
 _C.system.path = str(Path(__file__).parent.parent.resolve())
 _C.system.results_path = _C.system.path + '/results/'
 _C.system.scheduler = 'plateau' # 'step' or 'plateau'
-_C.system.batch_size = 8
+_C.system.batch_size = 4
 
 _C.data = CN()
 _C.data.root = '/home/shitbox/datasets/University-Release/'
@@ -25,10 +25,9 @@ _C.data.sample_equal = True
 
 
 _C.model = CN()
-_C.model.backbone = 'dinov2'
-_C.model.size = 'tiny'
-_C.model.epochs = 100
-
+_C.model.backbone = 'convnext' # 'convnext', 'dinov2
+_C.model.size = 'base'
+_C.model.epochs = 200
 
 _C.model.head = CN()
 _C.model.head.use = False
@@ -36,7 +35,6 @@ _C.model.head.params = CN()
 _C.model.head.params.inter_dims = 1024 # MAKE THIS MATCH YOUR MODEL OUTPUT
 _C.model.head.params.hidden_dims = 1024
 _C.model.head.params.output_dims = 1024
-
 
 
 def get_cfg_defaults():

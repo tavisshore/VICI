@@ -32,3 +32,8 @@ def recall_accuracy(query, db):
         metrics[m] = round((metrics[m]/len(query))*100, 4)
 
     return metrics
+
+
+
+
+
