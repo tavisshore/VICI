@@ -139,7 +139,7 @@ class Vanilla(pl.LightningModule):
         self.miner = None
 
         if cfg.model.miner == 'hard':
-            self.miner = miners.BatchEasyHardMiner(
+            self.miner_func = miners.BatchEasyHardMiner(
                 pos_strategy='hard', 
                 neg_strategy='hard'
                 )
@@ -203,7 +203,12 @@ class Vanilla(pl.LightningModule):
 
         street_out, sat_out = self(street, sat)
         embs, anchors, positives, negatives = self.exhaustive_triplets(street_out, sat_out, labels)
-        loss = self.loss_func(embs, indices_tuple=(anchors, positives, negatives))
+
+        if self.miner != None:
+            miner_output = self.miner_func(embs, labels)
+            loss = self.loss_func(embs, indices_tuple=miner_output)
+        else:
+            loss = self.loss_func(embs, indices_tuple=(anchors, positives, negatives))
 
         self.log('train_loss', loss, on_step=True, prog_bar=True, logger=True, sync_dist=True, batch_size=street.shape[0])
         self.train_loss.append(loss) 
