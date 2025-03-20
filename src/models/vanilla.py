@@ -1,7 +1,6 @@
 from pathlib import Path
 import numpy as np
 import torch
-import timm 
 from torch import nn
 from torch.utils.data import DataLoader
 import lightning.pytorch as pl
@@ -31,7 +30,6 @@ class ConvNextExtractor(pl.LightningModule):
             self.street_conv.classifier[2] = nn.Identity()
             self.sat_conv = convnext_base(weights=ConvNeXt_Base_Weights.DEFAULT)
             self.sat_conv.classifier[2] = nn.Identity()
-        # TODO: add more models here. Consider use TIMM
 
         # Add projection head
         
