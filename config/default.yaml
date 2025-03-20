@@ -5,7 +5,7 @@ system:
   batch_size: 26
 
 data:
-  root: '/gpfs1/home/x/z/xzhang31/scratch/university-1652/University-1652'
+  root: '/home/shitbox/datasets/University-Release/'
   samearea: False
   augment: True
   sample_equal: True
