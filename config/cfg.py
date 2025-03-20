@@ -26,6 +26,7 @@ _C.model = CN()
 _C.model.size = 'base'
 _C.model.epochs = 100
 _C.model.shared_extractor = False
+_C.model.miner = 'hard'
 
 _C.model.head = CN()
 _C.model.head.use = True

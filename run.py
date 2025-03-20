@@ -10,7 +10,7 @@ pl.seed_everything(42)
 
 args = argparse.ArgumentParser()
 args.add_argument('--config', type=str, default='default.yaml')
-args.add_argument('--exp_name', type=str, default='dev_1')
+# args.add_argument('--exp_name', type=str, default='dev_1')
 args.add_argument('--debug', action='store_true')
 args = vars(args.parse_args())
 

@@ -5,7 +5,7 @@ from torch import nn
 from torch.utils.data import DataLoader
 import lightning.pytorch as pl
 from torchvision.models import convnext_tiny, ConvNeXt_Tiny_Weights, convnext_base, ConvNeXt_Base_Weights
-from pytorch_metric_learning import losses
+from pytorch_metric_learning import losses, miners
 from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR
 from torch.nn import functional as F
 import zipfile
@@ -135,6 +135,14 @@ class Vanilla(pl.LightningModule):
 
         self.loss_func = losses.NTXentLoss()
         self.mse = nn.MSELoss()
+
+        self.miner = None
+
+        if cfg.model.miner == 'hard':
+            self.miner = miners.BatchEasyHardMiner(
+                pos_strategy='hard', 
+                neg_strategy='hard'
+                )
         
         self.train_loss, self.val_loss, self.test_loss = [], [], []
         self.train_query, self.train_ref = [], []
