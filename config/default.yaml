@@ -13,6 +13,7 @@ data:
 model:
   size: 'tiny'
   epochs: 200
+  shared_extractor: False
   head: 
     use: False
     params:
