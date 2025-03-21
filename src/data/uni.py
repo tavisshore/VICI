@@ -72,7 +72,6 @@ class University1652_CVGL(Dataset):
                     self.image_pairs[id][i_s] = DotMap(streetview=s, satellite=satellite[0], pair=id, idx=i_s)
                     street_counter += 1
 
-                # TODO: This dodgy bit of code simplifies sampling - evaluate now.
                     if not self.cfg.data.sample_equal: # Every possible image pair is a sample
                         self.pair_keys.append(DotMap(pair=id, index=i_s))
                 if self.cfg.data.sample_equal: # Only one image pair per satellite reference - randomly select streetview at runtime
@@ -95,33 +94,16 @@ class University1652_CVGL(Dataset):
                     street_counter += 1
         elif stage == 'test':
             counter = 0
-            # for id in (self.root / 'workshop_query_street').iterdir():
-            #     self.image_pairs[counter] = DotMap(streetview=id, name=id.stem)
-            #     counter += 1
-            #     street_counter += 1
-
             with open(f"{self.cfg.data.root}/test/query_street_name.txt", "r") as f:
                 for line in f.readlines():
                     line = line.strip()
                     id = self.root / 'workshop_query_street' / line
                     self.image_pairs[counter] = DotMap(streetview=id, name=id.stem)
                     counter += 1
-                    street_counter += 1
-
-
             for id in (self.root / 'workshop_gallery_satellite').iterdir():
                 self.image_pairs[counter] = DotMap(satellite=id, name=id.stem)
                 counter += 1
-                sat_counter += 1
             self.pair_keys = list(self.image_pairs.keys())
-
-            my_file = open(f"{self.cfg.data.root}/test/query_street_name.txt", "r") # BOTH WRONG - NEED CORRECT FILE! query_street_name - 2579? or query_label 2579?
-            data = my_file.read() 
-            self.test_order = data.split("\n") 
-            self.test_order = [x.split('.')[0] for x in self.test_order]
-            self.test_order = self.test_order[:-1]
-            my_file.close()
-        print(f'{stage} - streetview: {street_counter}, satellite: {sat_counter}\n')
 
     def __len__(self):
         return len(self.pair_keys)
