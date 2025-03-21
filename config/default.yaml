@@ -10,8 +10,9 @@ data:
   sample_equal: True
 
 model:
+  name: 'vit'
   size: 'tiny'
-  image_size: 384
+  image_size: 224
   epochs: 200
   shared_extractor: False
   head: 

@@ -67,7 +67,7 @@ class FeatureExtractor(pl.LightningModule):
         elif cfg.model.backbone == 'dinov2':
             self.street_conv = timm.create_model(f'timm/vit_small_patch14_dinov2.lvd142m', pretrained=True, num_classes=0)
         elif cfg.model.backbone == 'vit':
-            self.street_conv = timm.create_model(f'timm/vit_base_patch16_siglip_512.v2_webli', pretrained=True, num_classes=0)
+            self.street_conv = timm.create_model(f'timm/timm/vit_small_patch16_224.augreg_in21k_ft_in1k', pretrained=True, num_classes=0)
 
         if not cfg.model.shared_extractor:
             self.sat_conv = self.street_conv # check if this copies or links?

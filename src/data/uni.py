@@ -1,47 +1,15 @@
 """
 Dataloaders for University1652
 """
-import torch
 from pathlib import Path
+import torch
 from torch.utils.data import Dataset
-from torchvision import transforms
+import timm
 from PIL import Image
 from dotmap import DotMap
-import timm
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-
-class OverSampler(torch.utils.data.Sampler):
-    """
-    Sample cross-views from dataset at equal rate per satellite reference
-    """
-    def __init__(self, data_source, shuffle=True):
-        self.data_source = data_source
-        self.shuffle = shuffle
-        self.indices = list(range(len(data_source)))
-
-        sample_weights = {}
-        for i in self.data_source.image_pairs.keys():
-            sample_weights[i] = len(self.data_source.image_pairs[i])
-        max_weight = max(sample_weights.values())
-        for i in sample_weights.keys():
-            sample_weights[i] = max_weight - sample_weights[i]
-        # self.indices = [idx for idx in self.indices for _ in range(sample_weights[self.data_source.pair_keys[idx].pair])
-        print(sample_weights)
-      
-        # self.indices = [idx for idx in self.indices for _ in range(sample_weights[self.data_source.pair_keys[idx].pair])
-
-        if self.shuffle:
-            torch.manual_seed(0)
-            torch.randperm(len(data_source))
-
-    def __iter__(self):
-        return iter(self.indices)
-
-    def __len__(self):
-        return len(self.data_source)
-    
 
 
 class University1652_CVGL(Dataset):
