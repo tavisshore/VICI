@@ -7,6 +7,7 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 from PIL import Image
 from dotmap import DotMap
+import timm
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -44,26 +45,12 @@ class OverSampler(torch.utils.data.Sampler):
 
 
 class University1652_CVGL(Dataset):
-    def __init__(self, cfg, stage: str = 'train'):
+    def __init__(self, cfg, stage: str = 'train', data_config=None):
         self.cfg = cfg
         self.stage = stage
         self.root = Path(self.cfg.data.root) / stage if stage != 'val' else Path(self.cfg.data.root) / 'test'
-    
-        self.transform = transforms.Compose([
-            transforms.Resize((256, 256)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),            
-        ])
-
-        self.augment = transforms.Compose([
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomVerticalFlip(),
-            transforms.RandomRotation(15),
-            transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1),
-            transforms.RandomResizedCrop(256, scale=(0.8, 1.0)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
+        
+        self.transform = timm.data.create_transform(**data_config, is_training=True if stage == 'train' else False)
 
         self.image_pairs = DotMap()
         sat_counter, street_counter = 0, 0
@@ -134,7 +121,7 @@ class University1652_CVGL(Dataset):
             self.test_order = [x.split('.')[0] for x in self.test_order]
             self.test_order = self.test_order[:-1]
             my_file.close()
-        # print(f'{stage} - streetview: {street_counter}, satellite: {sat_counter}\n')
+        print(f'{stage} - streetview: {street_counter}, satellite: {sat_counter}\n')
 
     def __len__(self):
         return len(self.pair_keys)
@@ -159,8 +146,8 @@ class University1652_CVGL(Dataset):
             imgs = self.image_pairs[sample.pair][sample.index]
             streetview = Image.open(imgs.streetview).convert('RGB')
             satellite = Image.open(imgs.satellite).convert('RGB')
-            streetview = self.augment(streetview) if self.cfg.data.augment else self.transform(streetview)
-            satellite = self.augment(satellite) if self.cfg.data.augment else self.transform(satellite)
+            streetview = self.transform(streetview)
+            satellite = self.transform(satellite)
             return {'streetview': streetview, 'satellite': satellite, 'label': sample.pair}
 
 

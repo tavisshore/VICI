@@ -2,7 +2,6 @@ exp_name: 'tiny'
 system:
   gpus: -1
   workers: 4
-  batch_size: 26
 
 data:
   root: '/home/shitbox/datasets/University-Release/'
@@ -20,4 +19,5 @@ model:
       inter_dims: 768
       hidden_dims: 768
       output_dims: 768
+
 

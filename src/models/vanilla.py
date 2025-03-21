@@ -4,9 +4,12 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 import lightning.pytorch as pl
+
+import timm 
 from torchvision.models import convnext_tiny, ConvNeXt_Tiny_Weights, convnext_base, ConvNeXt_Base_Weights
 from pytorch_metric_learning import losses, miners
 from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR, CosineAnnealingLR
+
 from torch.nn import functional as F
 import zipfile
 from dotmap import DotMap
@@ -89,20 +92,23 @@ class ConvNextExtractor(pl.LightningModule):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
-        if cfg.model.size == 'tiny':
-            self.street_conv = convnext_tiny(weights=ConvNeXt_Tiny_Weights.DEFAULT)
-            self.street_conv.classifier[2] = nn.Identity()
-            self.sat_conv = convnext_tiny(weights=ConvNeXt_Tiny_Weights.DEFAULT)
-            self.sat_conv.classifier[2] = nn.Identity()
-            if cfg.model.head.use:
-                assert self.cfg.mode.head.params.inter_dims == 768, f"Inter dims should be 768 for tiny model, but got {self.cfg.mode.head.params.inter_dims}"
-        elif cfg.model.size == 'base':
-            self.street_conv = convnext_base(weights=ConvNeXt_Base_Weights.DEFAULT)
-            self.street_conv.classifier[2] = nn.Identity()
-            self.sat_conv = convnext_base(weights=ConvNeXt_Base_Weights.DEFAULT)
-            self.sat_conv.classifier[2] = nn.Identity()
-            if cfg.model.head.use:
-                assert self.cfg.mode.head.params.inter_dims == 1024, f"Inter dims should be 1024 for base model, but got {self.cfg.mode.head.params.inter_dims}"
+        if cfg.model.backbone == 'convnext': # convnextv2_huge.fcmae_ft_in22k_in1k_512
+            self.street_conv = timm.create_model(f'timm/convnextv2_{cfg.model.size}.fcmae_ft_in22k_in1k_{cfg.model.image_size}', pretrained=True, num_classes=0)
+            self.sat_conv = timm.create_model(f'timm/convnextv2_{cfg.model.size}.fcmae_ft_in22k_in1k_{cfg.model.image_size}', pretrained=True, num_classes=0)
+            # self.street_conv = timm.create_model(f'convnext_{cfg.model.size}.fb_in22k_ft_in1k_384', pretrained=True, num_classes=0)
+            # self.sat_conv = timm.create_model(f'convnext_{cfg.model.size}.fb_in22k_ft_in1k_384', pretrained=True, num_classes=0)
+            # convnextv2_base.fcmae_ft_in22k_in1k
+        elif cfg.model.backbone == 'dinov2':
+            self.street_conv = timm.create_model(f'timm/vit_small_patch14_dinov2.lvd142m', pretrained=True, num_classes=0)
+            self.sat_conv = timm.create_model(f'timm/vit_small_patch14_dinov2.lvd142m', pretrained=True, num_classes=0)
+        elif cfg.model.backbone == 'vit':
+            self.street_conv = timm.create_model(f'timm/vit_base_patch16_siglip_512.v2_webli', pretrained=True, num_classes=0)
+            self.sat_conv = timm.create_model(f'timm/vit_base_patch16_siglip_512.v2_webli', pretrained=True, num_classes=0)
+
+        self.data_config = timm.data.resolve_model_data_config(self.street_conv)
+        # Get dims from this config?
+        # if cfg.model.head.use:
+            # assert self.cfg.mode.head.params.inter_dims == 768 if cfg.model.size == 'tiny' else 1024, f"Inter dims should be 768 for tiny model, but got {self.cfg.mode.head.params.inter_dims}"
 
         # Add projection head
         if cfg.model.head.use:
@@ -150,15 +156,15 @@ class Vanilla(pl.LightningModule):
         self.test_outputs = DotMap(streetview=DotMap(), satellite=DotMap())
 
     def train_dataloader(self):
-        train_dataset = University1652_CVGL(self.cfg, stage='train')
+        train_dataset = University1652_CVGL(self.cfg, stage='train', data_config=self.model.data_config)
         return DataLoader(train_dataset, batch_size=self.cfg.system.batch_size, num_workers=4, shuffle=True)
 
     def val_dataloader(self):
-        val_dataset = University1652_CVGL(self.cfg, stage='val')
+        val_dataset = University1652_CVGL(self.cfg, stage='val', data_config=self.model.data_config)
         return DataLoader(val_dataset, batch_size=self.cfg.system.batch_size, num_workers=4, shuffle=False)
     
     def test_dataloader(self):
-        self.test_dataset = University1652_CVGL(self.cfg, stage='test')
+        self.test_dataset = University1652_CVGL(self.cfg, stage='test', data_config=self.model.data_config)
         return DataLoader(self.test_dataset, batch_size=1, num_workers=4, shuffle=False)
     
     def forward(self, street: torch.Tensor = None, sat: torch.Tensor = None, image: torch.Tensor = None, branch: str = 'streetview', stage: str = 'train'):
@@ -221,16 +227,13 @@ class Vanilla(pl.LightningModule):
     
     def on_train_epoch_end(self):
         avg_loss = torch.stack([x for x in self.train_loss]).mean()
-        self.log('train_epoch_loss', avg_loss, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
-        self.train_loss = []
+        self.log('train_loss_epoch', avg_loss, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
 
         query = np.concatenate(self.train_query, axis=0)
         ref = np.concatenate(self.train_ref, axis=0)
         metrics = recall_accuracy(query, ref)
-        self.log('train_1', metrics[1], on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
-        self.log('train_5', metrics[5], on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
-        self.log('train_10', metrics[10], on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
-        self.train_query, self.train_ref = [], []
+        for i in [1, 5, 10]: self.log(f'train_{i}', metrics[i], on_epoch=True, prog_bar=False, logger=True, sync_dist=True) 
+        self.train_loss, self.train_query, self.train_ref = [], [], []
         return avg_loss
     
     def validation_step(self, batch, batch_idx):
@@ -252,17 +255,19 @@ class Vanilla(pl.LightningModule):
     
     def on_validation_epoch_end(self):
         avg_loss = torch.stack([x for x in self.val_loss]).mean()
-        self.log('val_epoch_loss', avg_loss, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
-        self.val_loss = []
+        self.log('val_loss_epoch', avg_loss, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
 
         query = np.concatenate(self.val_query, axis=0)
         ref = np.concatenate(self.val_ref, axis=0)
         metrics = recall_accuracy(query, ref)
-        self.log('val_1', metrics[1], on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
-        self.log('val_5', metrics[5], on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
-        self.log('val_10', metrics[10], on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
-        self.val_query, self.val_ref = [], []
-        return
+        for i in [1, 5, 10]: self.log(f'val_{i}', metrics[i], on_epoch=True, prog_bar=False, logger=True, sync_dist=True) 
+
+        mean_val_1_10 = torch.stack([self.trainer.callback_metrics[f'val_{i}'] for i in [1, 10]]).mean()
+        self.log('val_mean', mean_val_1_10, on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
+        self.val_loss, self.val_query, self.val_ref = [], [], []
+
+        current_lr = self.trainer.lr_scheduler_configs[0].scheduler.get_last_lr()[0]
+        self.log('current_lr', current_lr, on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
     
     def test_step(self, batch, batch_idx):
         batch_keys = batch.keys()
@@ -275,9 +280,9 @@ class Vanilla(pl.LightningModule):
 
     def on_test_epoch_end(self):
         # Get top-10 retrievals for each streetview image and save names to file
-        streetview_keys = list(self.test_outputs['streetview'].keys()) 
+        # streetview_keys = list(self.test_outputs['streetview'].keys()) 
         # Should be 7737 values at the end
-        # streetview_keys = self.test_dataset.test_order
+        streetview_keys = self.test_dataset.test_order
         # print(f'ordered length: {len(streetview_keys)}')
         streetview_embeddings = [self.test_outputs['streetview'][x] for x in streetview_keys]
         satellite_keys = list(self.test_outputs['satellite'].keys())
@@ -316,12 +321,12 @@ class Vanilla(pl.LightningModule):
             f.write(self.cfg.dump())
         
     def configure_optimizers(self):
-        opt = torch.optim.AdamW(params=self.parameters(), lr=1e-4) #if self.hparams.gnn else torch.optim.AdamW(params=self.further_encoder.parameters(), lr=self.args.lr)
+        opt = torch.optim.AdamW(params=self.parameters(), lr=1e-4) 
         if self.cfg.system.scheduler == 'plateau':
-            sch = ReduceLROnPlateau(optimizer=opt, mode='min', factor=0.5, verbose=True)
-            return [opt], [{"scheduler": sch, "interval": "epoch", 'frequency': 5, "monitor": "val_epoch_loss"}]
+            sch = ReduceLROnPlateau(optimizer=opt, mode='min', factor=0.5)
+            return [opt], [{"scheduler": sch, "interval": "epoch", 'frequency': 5, "monitor": "val_loss_epoch"}]
         elif self.cfg.system.scheduler == 'step':
-            sch = StepLR(optimizer=opt, step_size=40, gamma=0.5, verbose=True)
+            sch = StepLR(optimizer=opt, step_size=40, gamma=0.5)
             return [opt], [{"scheduler": sch, "interval": "epoch"}]
         elif self.cfg.system.scheduler == 'cos':
             sch = CosineAnnealingLR(optimizer=opt, T_max=self.cfg.model.epochs)

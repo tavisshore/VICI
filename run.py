@@ -2,6 +2,7 @@ import argparse
 import lightning.pytorch as pl
 from lightning.pytorch import loggers as plg
 from lightning.pytorch.callbacks import ModelCheckpoint
+from lightning.pytorch.tuner import Tuner
 
 from src.models.vanilla import Vanilla
 from config.cfg import get_cfg_defaults
@@ -9,9 +10,8 @@ from src.utils import results_dir
 pl.seed_everything(42)
 
 args = argparse.ArgumentParser()
-args.add_argument('--config', type=str, default='default.yaml')
-# args.add_argument('--exp_name', type=str, default='dev_1')
 args.add_argument('--debug', action='store_true')
+args.add_argument('--config', type=str, default='default.yaml')
 args = vars(args.parse_args())
 
 arglist = []
@@ -32,21 +32,28 @@ if not cfg.debug:
     wandb_logger.log_hyperparams(cfg)
 else:
     cfg.system.batch_size = 8
-    cfg.model.epochs, cfg.system.workers = 25, 1
+    cfg.model.epochs, cfg.system.gpus = 25, 1
     wandb_logger = None
 
-checkpoint_callback = ModelCheckpoint(monitor="val_1", mode="max", dirpath=f'{cfg.system.results_path}/ckpts/', save_top_k=1,
-                                      filename='{epoch}-{val_1:.2f}')
+checkpoint_callback = ModelCheckpoint(monitor="val_mean", mode="max", dirpath=f'{cfg.system.results_path}/ckpts/', save_top_k=1,
+                                      filename='{epoch}-{val_mean:.2f}')
 
 model = Vanilla(cfg)
-trainer = pl.Trainer(max_epochs=cfg.model.epochs, devices=cfg.system.workers, 
+trainer = pl.Trainer(max_epochs=cfg.model.epochs, devices=cfg.system.gpus, 
                      logger=wandb_logger if not cfg.debug else None,
                      callbacks=[checkpoint_callback],
-                     check_val_every_n_epoch=4,
+                     check_val_every_n_epoch=2,
                      overfit_batches=4 if cfg.debug else 0,
                      num_sanity_val_steps=0,
                      default_root_dir=cfg.system.results_path)
+
+# if not cfg.debug:
+    # tuner = Tuner(trainer)
+    # tuner.scale_batch_size(model, mode="power")
+    # cfg.system.batch_size = model.hparams.batch_size
+
 trainer.fit(model)
-trainer = pl.Trainer(devices=1, logger=wandb_logger if not cfg.debug else None, default_root_dir=cfg.system.results_path)
+
+trainer = pl.Trainer(devices=1, default_root_dir=cfg.system.results_path)
 trainer.test(model, ckpt_path=checkpoint_callback.best_model_path)
 
