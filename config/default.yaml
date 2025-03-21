@@ -6,8 +6,6 @@ system:
 
 data:
   root: '/home/shitbox/datasets/University-Release/'
-  samearea: False
-  augment: True
   sample_equal: True
 
 model:

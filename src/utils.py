@@ -25,11 +25,9 @@ def recall_accuracy(query, db, labels):
     _, retrievals = tree.query(query, k=db_length)
 
     for gt_ind, ret_inds in enumerate(retrievals):
-
-        ground_truth_inds = np.where(labels == labels[gt_ind])[0]
-
+        indices = np.array([i for i, x in enumerate(labels) if x == labels[gt_ind]])
         # Single Image Retrieval Recall Accuracies
-        for k in filter(lambda k: len(np.intersect1d(ret_inds[:k], ground_truth_inds)) > 0, ks):
+        for k in filter(lambda k: len(np.intersect1d(ret_inds[:k], indices)) > 0, ks):
             metrics[k] += 1
 
     for m in metrics:

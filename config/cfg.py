@@ -18,8 +18,6 @@ _C.system.scheduler = 'step' # 'step' or 'plateau' or 'cos'
 
 _C.data = CN()
 _C.data.root = '/home/shitbox/datasets/University-Release/'
-_C.data.samearea = False
-_C.data.augment = True
 _C.data.sample_equal = True
 
 
