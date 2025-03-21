@@ -6,7 +6,6 @@ from torch.utils.data import DataLoader
 import lightning.pytorch as pl
 
 import timm 
-from torchvision.models import convnext_tiny, ConvNeXt_Tiny_Weights, convnext_base, ConvNeXt_Base_Weights
 from pytorch_metric_learning import losses, miners
 from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR, CosineAnnealingLR
 
@@ -15,7 +14,7 @@ import zipfile
 from dotmap import DotMap
 
 from src.data.uni import University1652_CVGL
-from src.utils import recall_accuracy
+from src.utils import recall_accuracy, get_backbone
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -62,15 +61,10 @@ class FeatureExtractor(pl.LightningModule):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
-        if cfg.model.backbone == 'convnext': # Previous - f'convnext_{cfg.model.size}.fb_in22k_ft_in1k_384'
-            self.street_conv = timm.create_model(f'timm/convnextv2_{cfg.model.size}.fcmae_ft_in22k_in1k_{cfg.model.image_size}', pretrained=True, num_classes=0)
-        elif cfg.model.backbone == 'dinov2':
-            self.street_conv = timm.create_model(f'timm/vit_small_patch14_dinov2.lvd142m', pretrained=True, num_classes=0)
-        elif cfg.model.backbone == 'vit':
-            self.street_conv = timm.create_model(f'timm/vit_base_patch16_siglip_512.v2_webli', pretrained=True, num_classes=0)
 
+        self.street_conv = get_backbone(cfg)
         if not cfg.model.shared_extractor:
-            self.sat_conv = self.street_conv # check if this copies or links?
+            self.sat_conv = self.street_conv
 
         self.data_config = timm.data.resolve_model_data_config(self.street_conv)
 
@@ -114,6 +108,7 @@ class Vanilla(pl.LightningModule):
         self.train_loss, self.val_loss, self.test_loss = [], [], []
         self.train_query, self.train_ref = [], []
         self.val_query, self.val_ref = [], []
+        self.train_labels, self.val_labels = [], []
         self.test_outputs = DotMap(streetview=DotMap(), satellite=DotMap())
 
     def train_dataloader(self):
@@ -185,17 +180,20 @@ class Vanilla(pl.LightningModule):
         self.train_loss.append(loss) 
         self.train_query.append([x.cpu().detach().numpy() for x in street_out])
         self.train_ref.append([x.cpu().detach().numpy() for x in sat_out])
+        self.train_labels.append(labels)
         return loss
     
     def on_train_epoch_end(self):
         avg_loss = torch.stack([x for x in self.train_loss]).mean()
         self.log('train_loss_epoch', avg_loss, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
 
+        train_labels = [item for sublist in self.train_labels for item in sublist]
         query = np.concatenate(self.train_query, axis=0)
         ref = np.concatenate(self.train_ref, axis=0)
-        metrics = recall_accuracy(query, ref)
+        metrics = recall_accuracy(query, ref, train_labels)
         for i in [1, 5, 10]: self.log(f'train_{i}', metrics[i], on_epoch=True, prog_bar=False, logger=True, sync_dist=True) 
         self.train_loss, self.train_query, self.train_ref = [], [], []
+        self.train_labels = []
         return avg_loss
     
     def validation_step(self, batch, batch_idx):
@@ -210,20 +208,23 @@ class Vanilla(pl.LightningModule):
         self.val_loss.append(loss)
         self.val_query.append([x.cpu().detach().numpy() for x in street_out])
         self.val_ref.append([x.cpu().detach().numpy() for x in sat_out])
+        self.val_labels.append(batch['label'])
         return loss
     
     def on_validation_epoch_end(self):
         avg_loss = torch.stack([x for x in self.val_loss]).mean()
         self.log('val_loss_epoch', avg_loss, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
 
+        val_labels = [item for sublist in self.val_labels for item in sublist]
         query = np.concatenate(self.val_query, axis=0)
         ref = np.concatenate(self.val_ref, axis=0)
-        metrics = recall_accuracy(query, ref)
+        metrics = recall_accuracy(query, ref, val_labels)
         for i in [1, 5, 10]: self.log(f'val_{i}', metrics[i], on_epoch=True, prog_bar=False, logger=True, sync_dist=True) 
 
         mean_val_1_10 = torch.stack([self.trainer.callback_metrics[f'val_{i}'] for i in [1, 10]]).mean()
         self.log('val_mean', mean_val_1_10, on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
         self.val_loss, self.val_query, self.val_ref = [], [], []
+        self.val_labels = []
 
         current_lr = self.trainer.lr_scheduler_configs[0].scheduler.get_last_lr()[0]
         self.log('current_lr', current_lr, on_epoch=True, prog_bar=False, logger=True, sync_dist=True)

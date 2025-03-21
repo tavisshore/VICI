@@ -18,8 +18,6 @@ _C.system.scheduler = 'step' # 'step' or 'plateau' or 'cos'
 
 _C.data = CN()
 _C.data.root = '/home/shitbox/datasets/University-Release/'
-_C.data.samearea = False
-_C.data.augment = True
 _C.data.sample_equal = True
 
 
@@ -27,10 +25,10 @@ _C.model = CN()
 _C.model.epochs = 200
 
 _C.model.backbone = 'convnext' # 'convnext', 'dinov2
-_C.model.size = 'base'
+_C.model.size = 'tiny'
 
 _C.model.image_size = 384
-_C.system.batch_size = 3
+_C.system.batch_size = 32
 _C.model.shared_extractor = False
 _C.model.miner = 'hard'
 

@@ -1,8 +1,9 @@
 
 from pathlib import Path
-import math
 import numpy as np
 from scipy.spatial import KDTree
+import timm 
+
 
 def results_dir(cfg):
     folder = [f.name for f in Path(cfg.system.results_path).iterdir() if f.is_dir()]
@@ -14,7 +15,7 @@ def results_dir(cfg):
     Path(f'{results_folder}/lightning_logs').mkdir(parents=True, exist_ok=True)
     return results_folder
 
-def recall_accuracy(query, db):
+def recall_accuracy(query, db, labels):
     db_length = len(db)
 
     tree = KDTree(db)
@@ -23,9 +24,15 @@ def recall_accuracy(query, db):
 
     _, retrievals = tree.query(query, k=db_length)
 
+    ground_truths = {}
+    for i, label in enumerate(labels):
+        if label not in ground_truths:
+            ground_truths[label] = []
+        ground_truths[label].append(i)
+
     for gt_ind, ret_inds in enumerate(retrievals):
-        # Single Image Retrieval Recall Accuracies
-        for k in filter(lambda k: len(np.intersect1d(ret_inds[:k], gt_ind)) > 0, ks):
+        indices = ground_truths[labels[gt_ind]]
+        for k in filter(lambda k: len(np.intersect1d(ret_inds[:k], indices)) > 0, ks):
             metrics[k] += 1
 
     for m in metrics:
@@ -35,5 +42,43 @@ def recall_accuracy(query, db):
 
 
 
+def get_backbone(cfg):
+    # Better way to do this?
+    # Add more backbones here to eval
+    backbones = {
+        'convnext': {
+            'tiny': {
+                224: 'timm/convnextv2_tiny.fcmae_ft_in22k_in1k_224',
+                384: 'timm/convnextv2_tiny.fcmae_ft_in22k_in1k_384'
+            },
+            'base': {
+                224: 'timm/convnextv2_base.fcmae_ft_in22k_in1k_224',
+                384: 'timm/convnextv2_base.fcmae_ft_in22k_in1k_384'
+            }
+        },  
+        'dinov2': {
+            'tiny': 'timm/vit_small_patch14_reg4_dinov2.lvd142m', # size irrelevant?
+            'base': 'timm/vit_base_patch14_reg4_dinov2.lvd142m'
+        },
+        'vit': {
+            'tiny': {
+                224: 'timm/vit_tiny_patch16_224.augreg_in21k_ft_in1k',
+            },
+            'base': {
+                224: 'timm/vit_base_patch16_224.augreg_in21k_ft_in1k',
+                384: 'timm/vit_base_patch16_384.augreg_in21k_ft_in1k'
+            }   
+        }
+    }
 
+    assert cfg.model.backbone in backbones, f"Backbone {cfg.model.backbone} not supported"
+    assert cfg.model.size in backbones[cfg.model.backbone], f"Size {cfg.model.size} not supported for {cfg.model.backbone}"
+    assert cfg.model.image_size in backbones[cfg.model.backbone][cfg.model.size], f"Image size {cfg.model.image_size} not supported for {cfg.model.backbone} {cfg.model.size}"
 
+    network = backbones[cfg.model.backbone][cfg.model.size]
+    if cfg.model.backbone != 'dinov2':
+        network = network[cfg.model.image_size]
+
+    return timm.create_model(backbones[cfg.model.backbone][cfg.model.size][cfg.model.image_size], pretrained=True, num_classes=0)
+
+    

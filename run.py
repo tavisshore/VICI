@@ -2,7 +2,6 @@ import argparse
 import lightning.pytorch as pl
 from lightning.pytorch import loggers as plg
 from lightning.pytorch.callbacks import ModelCheckpoint
-from lightning.pytorch.tuner import Tuner
 
 from src.models.vanilla import Vanilla
 from config.cfg import get_cfg_defaults
@@ -46,12 +45,6 @@ trainer = pl.Trainer(max_epochs=cfg.model.epochs, devices=cfg.system.gpus,
                      overfit_batches=4 if cfg.debug else 0,
                      num_sanity_val_steps=0,
                      default_root_dir=cfg.system.results_path)
-
-# if not cfg.debug:
-    # tuner = Tuner(trainer)
-    # tuner.scale_batch_size(model, mode="power")
-    # cfg.system.batch_size = model.hparams.batch_size
-
 trainer.fit(model)
 
 trainer = pl.Trainer(devices=1, default_root_dir=cfg.system.results_path)
