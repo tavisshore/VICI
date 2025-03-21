@@ -108,10 +108,20 @@ class University1652_CVGL(Dataset):
                     street_counter += 1
         elif stage == 'test':
             counter = 0
-            for id in (self.root / 'workshop_query_street').iterdir():
-                self.image_pairs[counter] = DotMap(streetview=id, name=id.stem)
-                counter += 1
-                street_counter += 1
+            # for id in (self.root / 'workshop_query_street').iterdir():
+            #     self.image_pairs[counter] = DotMap(streetview=id, name=id.stem)
+            #     counter += 1
+            #     street_counter += 1
+
+            with open(f"{self.cfg.data.root}/test/query_street_name.txt", "r") as f:
+                for line in f.readlines():
+                    line = line.strip()
+                    id = self.root / 'workshop_query_street' / line
+                    self.image_pairs[counter] = DotMap(streetview=id, name=id.stem)
+                    counter += 1
+                    street_counter += 1
+
+
             for id in (self.root / 'workshop_gallery_satellite').iterdir():
                 self.image_pairs[counter] = DotMap(satellite=id, name=id.stem)
                 counter += 1
@@ -163,7 +173,7 @@ if __name__ == '__main__':
     cfg.data.root = '/home/shitbox/datasets/University-Release/'
     cfg.data.augment = True
     cfg.data.sample_equal = True
-    data = University1652_CVGL(cfg=cfg, stage='train')
+    data = University1652_CVGL(cfg=cfg, stage='test')
     item = data.__getitem__(0)
     
     
