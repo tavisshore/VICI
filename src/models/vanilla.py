@@ -304,9 +304,11 @@ class Vanilla(pl.LightningModule):
                 results_counter += 1
         # print(f'Number of Results: {results_counter}')
         loczip = f'{self.cfg.system.results_path}/answer.zip'
-        zip = zipfile.ZipFile(loczip, "w", compression=zipfile.ZIP_STORED)
-        zip.write (loczip)
-        zip.close()
+        with zipfile.ZipFile(loczip, "w", compression=zipfile.ZIP_STORED) as myzip:
+            myzip.write(answer_file, arcname="answer.txt")
+        # zip = zipfile.ZipFile(loczip, "w", compression=zipfile.ZIP_STORED)
+        # zip.write (loczip)
+        # zip.close()
 
         # Save config & model
         self.trainer.save_checkpoint(f"{self.cfg.system.results_path}/final_model.ckpt")
@@ -320,6 +322,9 @@ class Vanilla(pl.LightningModule):
             return [opt], [{"scheduler": sch, "interval": "epoch", 'frequency': 5, "monitor": "val_epoch_loss"}]
         elif self.cfg.system.scheduler == 'step':
             sch = StepLR(optimizer=opt, step_size=40, gamma=0.5, verbose=True)
+            return [opt], [{"scheduler": sch, "interval": "epoch"}]
+        elif self.cfg.system.scheduler == 'cos':
+            sch = CosineAnnealingLR(optimizer=opt, T_max=self.cfg.model.epochs)
             return [opt], [{"scheduler": sch, "interval": "epoch"}]
         else:
             return opt
