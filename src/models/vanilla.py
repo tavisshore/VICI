@@ -60,9 +60,12 @@ class ConvNextExtractor(pl.LightningModule):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
-        if cfg.model.backbone == 'convnext':
-            self.street_conv = timm.create_model(f'convnext_{cfg.model.size}.fb_in22k_ft_in1k_384', pretrained=True, num_classes=0)
-            self.sat_conv = timm.create_model(f'convnext_{cfg.model.size}.fb_in22k_ft_in1k_384', pretrained=True, num_classes=0)
+        if cfg.model.backbone == 'convnext': # convnextv2_huge.fcmae_ft_in22k_in1k_512
+            self.street_conv = timm.create_model(f'timm/convnextv2_{cfg.model.size}.fcmae_ft_in22k_in1k_{cfg.model.image_size}', pretrained=True, num_classes=0)
+            self.sat_conv = timm.create_model(f'timm/convnextv2_{cfg.model.size}.fcmae_ft_in22k_in1k_{cfg.model.image_size}', pretrained=True, num_classes=0)
+            # self.street_conv = timm.create_model(f'convnext_{cfg.model.size}.fb_in22k_ft_in1k_384', pretrained=True, num_classes=0)
+            # self.sat_conv = timm.create_model(f'convnext_{cfg.model.size}.fb_in22k_ft_in1k_384', pretrained=True, num_classes=0)
+            # convnextv2_base.fcmae_ft_in22k_in1k
         elif cfg.model.backbone == 'dinov2':
             self.street_conv = timm.create_model(f'timm/vit_small_patch14_dinov2.lvd142m', pretrained=True, num_classes=0)
             self.sat_conv = timm.create_model(f'timm/vit_small_patch14_dinov2.lvd142m', pretrained=True, num_classes=0)
@@ -242,11 +245,8 @@ class Vanilla(pl.LightningModule):
 
         # Calculate cosine similarity between streetview and satellite embeddings
         # print(f'input shapes: {streetview.shape}, {satellite.shape}')
-        print(f'shapes 1: {streetview.shape}, {satellite.shape}')
         similarity = np.dot(streetview, satellite.T)
-        print(f'similarity shape: {similarity.shape}')
         similarity = np.argsort(similarity, axis=1)
-        print(f'similarity shape: {similarity.shape}')
 
         # print(f'\nSim Shape: {similarity.shape}\n')
 
