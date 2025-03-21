@@ -32,7 +32,7 @@ class LinearLayer(nn.Module):
         if self.use_bn:
              self.bn = nn.BatchNorm1d(self.out_features)
 
-    def forward(self,x):
+    def forward(self,x) -> torch.Tensor:
         x = self.linear(x)
         if self.use_bn:
             x = self.bn(x)
@@ -53,68 +53,32 @@ class ProjectionHead(nn.Module):
                                         nn.ReLU(),
                                         LinearLayer(self.hidden_features, self.out_features, False, True))
     
-    def forward(self,x):
+    def forward(self,x) -> torch.Tensor:
         x = self.layers(x)
         return x
 
-class SharedConvNextExtractor(pl.LightningModule):
+
+class FeatureExtractor(pl.LightningModule):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
-        if cfg.model.size == 'tiny':
-            self.shared_conv = convnext_tiny(weights=ConvNeXt_Tiny_Weights.DEFAULT)
-            self.shared_conv.classifier[2] = nn.Identity()
-            if cfg.model.head.use:
-                assert self.cfg.mode.head.params.inter_dims == 768, f"Inter dims should be 768 for tiny model, but got {self.cfg.mode.head.params.inter_dims}"
-        elif cfg.model.size == 'base':
-            self.shared_conv = convnext_base(weights=ConvNeXt_Base_Weights.DEFAULT)
-            self.shared_conv.classifier[2] = nn.Identity()
-            if cfg.model.head.use:
-                assert self.cfg.mode.head.params.inter_dims == 1024, f"Inter dims should be 1024 for base model, but got {self.cfg.mode.head.params.inter_dims}"
-
-        # Add projection head
-        if cfg.model.head.use:
-            self.proj_head = ProjectionHead(cfg.mode.head.params.inter_dims, cfg.mode.head.params.hidden_dims, cfg.mode.head.params.output_dims)
-        
-    def embed_street(self, pov_tile: torch.Tensor) -> torch.Tensor: 
-        x = self.shared_conv(pov_tile)
-        if self.cfg.model.head.use:
-            x = self.proj_head(x)
-        return x
-    
-    def embed_sat(self, map_tile: torch.Tensor) -> torch.Tensor: 
-        x = self.shared_conv(map_tile)
-        if self.cfg.model.head.use:
-            x = self.proj_head(x)
-        return x
-
-class ConvNextExtractor(pl.LightningModule):
-    def __init__(self, cfg):
-        super().__init__()
-        self.cfg = cfg
-        if cfg.model.backbone == 'convnext': # convnextv2_huge.fcmae_ft_in22k_in1k_512
+        if cfg.model.backbone == 'convnext': # Previous - f'convnext_{cfg.model.size}.fb_in22k_ft_in1k_384'
             self.street_conv = timm.create_model(f'timm/convnextv2_{cfg.model.size}.fcmae_ft_in22k_in1k_{cfg.model.image_size}', pretrained=True, num_classes=0)
-            self.sat_conv = timm.create_model(f'timm/convnextv2_{cfg.model.size}.fcmae_ft_in22k_in1k_{cfg.model.image_size}', pretrained=True, num_classes=0)
-            # self.street_conv = timm.create_model(f'convnext_{cfg.model.size}.fb_in22k_ft_in1k_384', pretrained=True, num_classes=0)
-            # self.sat_conv = timm.create_model(f'convnext_{cfg.model.size}.fb_in22k_ft_in1k_384', pretrained=True, num_classes=0)
-            # convnextv2_base.fcmae_ft_in22k_in1k
         elif cfg.model.backbone == 'dinov2':
             self.street_conv = timm.create_model(f'timm/vit_small_patch14_dinov2.lvd142m', pretrained=True, num_classes=0)
-            self.sat_conv = timm.create_model(f'timm/vit_small_patch14_dinov2.lvd142m', pretrained=True, num_classes=0)
         elif cfg.model.backbone == 'vit':
             self.street_conv = timm.create_model(f'timm/vit_base_patch16_siglip_512.v2_webli', pretrained=True, num_classes=0)
-            self.sat_conv = timm.create_model(f'timm/vit_base_patch16_siglip_512.v2_webli', pretrained=True, num_classes=0)
+
+        if not cfg.model.shared_extractor:
+            self.sat_conv = self.street_conv # check if this copies or links?
 
         self.data_config = timm.data.resolve_model_data_config(self.street_conv)
-        # Get dims from this config?
-        # if cfg.model.head.use:
-            # assert self.cfg.mode.head.params.inter_dims == 768 if cfg.model.size == 'tiny' else 1024, f"Inter dims should be 768 for tiny model, but got {self.cfg.mode.head.params.inter_dims}"
 
-        # Add projection head
         if cfg.model.head.use:
             self.street_head = ProjectionHead(cfg.mode.head.params.inter_dims, cfg.mode.head.params.hidden_dims, cfg.mode.head.params.output_dims)
-            self.sat_head = ProjectionHead(cfg.mode.head.params.inter_dims, cfg.mode.head.params.hidden_dims, cfg.mode.head.params.output_dims)
-        
+            if not cfg.model.shared_extractor:
+                self.sat_head = self.street_head
+
     def embed_street(self, pov_tile: torch.Tensor) -> torch.Tensor: 
         x = self.street_conv(pov_tile)
         if self.cfg.model.head.use:
@@ -133,10 +97,7 @@ class Vanilla(pl.LightningModule):
         super(Vanilla, self).__init__()
         self.cfg = cfg
 
-        if cfg.model.shared_extractor:
-            self.model = SharedConvNextExtractor(cfg)
-        else:
-            self.model = ConvNextExtractor(cfg)
+        self.model = FeatureExtractor(cfg)
         self.model.to(device)
 
         self.loss_func = losses.NTXentLoss()
@@ -167,23 +128,26 @@ class Vanilla(pl.LightningModule):
         self.test_dataset = University1652_CVGL(self.cfg, stage='test', data_config=self.model.data_config)
         return DataLoader(self.test_dataset, batch_size=1, num_workers=4, shuffle=False)
     
-    def forward(self, street: torch.Tensor = None, sat: torch.Tensor = None, image: torch.Tensor = None, branch: str = 'streetview', stage: str = 'train'):
+    def forward(self, street: torch.Tensor = None, sat: torch.Tensor = None, image: torch.Tensor = None, 
+                branch: str = 'streetview', stage: str = 'train'):
         if stage == 'test':
-            if branch == 'streetview':
+            if branch == 'streetview' or self.cfg.model.shared_extractor:
                 x = self.model.embed_street(image)
             else:
                 x = self.model.embed_sat(image)
-            x = F.normalize(x, p=2, dim=1)
-            return x
+            return F.normalize(x, p=2, dim=1)
     
         street_out = self.model.embed_street(street)
-        sat_out = self.model.embed_sat(sat)
+        if self.cfg.model.shared_extractor:
+            sat_out = self.model.embed_street(sat)
+        else:
+            sat_out = self.model.embed_sat(sat) 
+        
         street_out = F.normalize(street_out, p=2, dim=1)
         sat_out = F.normalize(sat_out, p=2, dim=1)
         return street_out, sat_out
 
-    def exhaustive_triplets(self, street: torch.Tensor, sat: torch.Tensor, labels: torch.Tensor):
-        embeddings = torch.cat((street.float(), sat.float()), dim=0)
+    def exhaustive_triplets(self, street: torch.Tensor, labels: torch.Tensor):
         batch_size = street.shape[0]
 
         oppose = batch_size - 1
@@ -199,7 +163,7 @@ class Vanilla(pl.LightningModule):
         anchors, positives, negatives = anchors[mask], positives[mask], negatives[mask]
         anchors, positives, negatives = anchors.to(device), positives.to(device), negatives.to(device)
         negatives += batch_size
-        return embeddings, anchors, positives, negatives
+        return anchors, positives, negatives
 
     def training_step(self, batch, batch_idx):
         street, sat = batch['streetview'], batch['satellite']
@@ -208,21 +172,19 @@ class Vanilla(pl.LightningModule):
         street = street.to(device)
 
         street_out, sat_out = self(street, sat)
-        embs, anchors, positives, negatives = self.exhaustive_triplets(street_out, sat_out, labels)
+        embs = torch.cat((street_out.float(), sat_out.float()), dim=0)
 
         if self.miner != None:
             miner_output = self.miner_func(embs, labels)
             loss = self.loss_func(embs, indices_tuple=miner_output)
         else:
+            anchors, positives, negatives = self.exhaustive_triplets(street_out, labels)
             loss = self.loss_func(embs, indices_tuple=(anchors, positives, negatives))
 
         self.log('train_loss', loss, on_step=True, prog_bar=True, logger=True, sync_dist=True, batch_size=street.shape[0])
         self.train_loss.append(loss) 
-
-        query = [x.cpu().detach().numpy() for x in street_out]
-        ref = [x.cpu().detach().numpy() for x in sat_out]
-        self.train_query.append(query)
-        self.train_ref.append(ref)
+        self.train_query.append([x.cpu().detach().numpy() for x in street_out])
+        self.train_ref.append([x.cpu().detach().numpy() for x in sat_out])
         return loss
     
     def on_train_epoch_end(self):
@@ -246,11 +208,8 @@ class Vanilla(pl.LightningModule):
 
         self.log('val_loss', loss, on_step=True, prog_bar=False, logger=True, sync_dist=True, batch_size=street.shape[0])
         self.val_loss.append(loss)
-
-        query = [x.cpu().detach().numpy() for x in street_out]
-        ref = [x.cpu().detach().numpy() for x in sat_out]
-        self.val_query.append(query)
-        self.val_ref.append(ref)
+        self.val_query.append([x.cpu().detach().numpy() for x in street_out])
+        self.val_ref.append([x.cpu().detach().numpy() for x in sat_out])
         return loss
     
     def on_validation_epoch_end(self):
@@ -280,40 +239,27 @@ class Vanilla(pl.LightningModule):
 
     def on_test_epoch_end(self):
         # Get top-10 retrievals for each streetview image and save names to file
-        # streetview_keys = list(self.test_outputs['streetview'].keys()) 
-        # Should be 7737 values at the end
-        streetview_keys = self.test_dataset.test_order
-        # print(f'ordered length: {len(streetview_keys)}')
-        streetview_embeddings = [self.test_outputs['streetview'][x] for x in streetview_keys]
+        streetview_keys = list(self.test_outputs['streetview'].keys()) 
         satellite_keys = list(self.test_outputs['satellite'].keys())
+        streetview_embeddings = [self.test_outputs['streetview'][x] for x in streetview_keys]
         satellite_embeddings = [self.test_outputs['satellite'][x] for x in satellite_keys]
-        
         streetview = np.concatenate(streetview_embeddings)
         satellite = np.concatenate(satellite_embeddings)
 
         # Calculate cosine similarity between streetview and satellite embeddings
-        # print(f'input shapes: {streetview.shape}, {satellite.shape}')
         similarity = np.dot(streetview, satellite.T)
         similarity = np.argsort(similarity, axis=1)
 
-        # print(f'\nSim Shape: {similarity.shape}\n')
-
-        # check highest numbered folder in self.cfg.system.results_path
-        results_counter = 0
+        # Save top-10 retrievals to file
         answer_file = f'{self.cfg.system.results_path}/answer.txt'
         with open(answer_file, 'w') as f:
-            for idx, sim in enumerate(similarity):
+            for sim in similarity:
                 for s in sim[:10]:
                     f.write(f"{satellite_keys[s]}\t")
                 f.write("\n")
-                results_counter += 1
-        # print(f'Number of Results: {results_counter}')
         loczip = f'{self.cfg.system.results_path}/answer.zip'
         with zipfile.ZipFile(loczip, "w", compression=zipfile.ZIP_STORED) as myzip:
             myzip.write(answer_file, arcname="answer.txt")
-        # zip = zipfile.ZipFile(loczip, "w", compression=zipfile.ZIP_STORED)
-        # zip.write (loczip)
-        # zip.close()
 
         # Save config & model
         self.trainer.save_checkpoint(f"{self.cfg.system.results_path}/final_model.ckpt")
