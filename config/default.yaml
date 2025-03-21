@@ -9,8 +9,15 @@ data:
   augment: True
   sample_equal: True
 
-# model:
-#   backbone: 'convnext'
-#   size: 'tiny'
-#   epochs: 200
+model:
+  size: 'tiny'
+  epochs: 200
+  shared_extractor: False
+  head: 
+    use: False
+    params:
+      inter_dims: 768
+      hidden_dims: 768
+      output_dims: 768
+
 

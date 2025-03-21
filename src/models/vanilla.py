@@ -4,10 +4,12 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 import lightning.pytorch as pl
-# from torchvision.models import convnext_tiny, ConvNeXt_Tiny_Weights, convnext_base, ConvNeXt_Base_Weights
+
 import timm 
-from pytorch_metric_learning import losses
-from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR
+from torchvision.models import convnext_tiny, ConvNeXt_Tiny_Weights, convnext_base, ConvNeXt_Base_Weights
+from pytorch_metric_learning import losses, miners
+from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR, CosineAnnealingLR
+
 from torch.nn import functional as F
 import zipfile
 from dotmap import DotMap
@@ -55,6 +57,36 @@ class ProjectionHead(nn.Module):
         x = self.layers(x)
         return x
 
+class SharedConvNextExtractor(pl.LightningModule):
+    def __init__(self, cfg):
+        super().__init__()
+        self.cfg = cfg
+        if cfg.model.size == 'tiny':
+            self.shared_conv = convnext_tiny(weights=ConvNeXt_Tiny_Weights.DEFAULT)
+            self.shared_conv.classifier[2] = nn.Identity()
+            if cfg.model.head.use:
+                assert self.cfg.mode.head.params.inter_dims == 768, f"Inter dims should be 768 for tiny model, but got {self.cfg.mode.head.params.inter_dims}"
+        elif cfg.model.size == 'base':
+            self.shared_conv = convnext_base(weights=ConvNeXt_Base_Weights.DEFAULT)
+            self.shared_conv.classifier[2] = nn.Identity()
+            if cfg.model.head.use:
+                assert self.cfg.mode.head.params.inter_dims == 1024, f"Inter dims should be 1024 for base model, but got {self.cfg.mode.head.params.inter_dims}"
+
+        # Add projection head
+        if cfg.model.head.use:
+            self.proj_head = ProjectionHead(cfg.mode.head.params.inter_dims, cfg.mode.head.params.hidden_dims, cfg.mode.head.params.output_dims)
+        
+    def embed_street(self, pov_tile: torch.Tensor) -> torch.Tensor: 
+        x = self.shared_conv(pov_tile)
+        if self.cfg.model.head.use:
+            x = self.proj_head(x)
+        return x
+    
+    def embed_sat(self, map_tile: torch.Tensor) -> torch.Tensor: 
+        x = self.shared_conv(map_tile)
+        if self.cfg.model.head.use:
+            x = self.proj_head(x)
+        return x
 
 class ConvNextExtractor(pl.LightningModule):
     def __init__(self, cfg):
@@ -83,7 +115,7 @@ class ConvNextExtractor(pl.LightningModule):
             self.street_head = ProjectionHead(cfg.mode.head.params.inter_dims, cfg.mode.head.params.hidden_dims, cfg.mode.head.params.output_dims)
             self.sat_head = ProjectionHead(cfg.mode.head.params.inter_dims, cfg.mode.head.params.hidden_dims, cfg.mode.head.params.output_dims)
         
-    def embed_street(self, pov_tile: torch.Tensor): 
+    def embed_street(self, pov_tile: torch.Tensor) -> torch.Tensor: 
         x = self.street_conv(pov_tile)
         if self.cfg.model.head.use:
             x = self.street_head(x)
@@ -101,11 +133,22 @@ class Vanilla(pl.LightningModule):
         super(Vanilla, self).__init__()
         self.cfg = cfg
 
-        self.model = ConvNextExtractor(cfg)
+        if cfg.model.shared_extractor:
+            self.model = SharedConvNextExtractor(cfg)
+        else:
+            self.model = ConvNextExtractor(cfg)
         self.model.to(device)
 
         self.loss_func = losses.NTXentLoss()
         self.mse = nn.MSELoss()
+
+        self.miner = None
+
+        if cfg.model.miner == 'hard':
+            self.miner_func = miners.BatchEasyHardMiner(
+                pos_strategy='hard', 
+                neg_strategy='hard'
+                )
         
         self.train_loss, self.val_loss, self.test_loss = [], [], []
         self.train_query, self.train_ref = [], []
@@ -166,7 +209,12 @@ class Vanilla(pl.LightningModule):
 
         street_out, sat_out = self(street, sat)
         embs, anchors, positives, negatives = self.exhaustive_triplets(street_out, sat_out, labels)
-        loss = self.loss_func(embs, indices_tuple=(anchors, positives, negatives))
+
+        if self.miner != None:
+            miner_output = self.miner_func(embs, labels)
+            loss = self.loss_func(embs, indices_tuple=miner_output)
+        else:
+            loss = self.loss_func(embs, indices_tuple=(anchors, positives, negatives))
 
         self.log('train_loss', loss, on_step=True, prog_bar=True, logger=True, sync_dist=True, batch_size=street.shape[0])
         self.train_loss.append(loss) 
@@ -261,9 +309,11 @@ class Vanilla(pl.LightningModule):
                 results_counter += 1
         # print(f'Number of Results: {results_counter}')
         loczip = f'{self.cfg.system.results_path}/answer.zip'
-        zip = zipfile.ZipFile(loczip, "w", compression=zipfile.ZIP_STORED)
-        zip.write (loczip)
-        zip.close()
+        with zipfile.ZipFile(loczip, "w", compression=zipfile.ZIP_STORED) as myzip:
+            myzip.write(answer_file, arcname="answer.txt")
+        # zip = zipfile.ZipFile(loczip, "w", compression=zipfile.ZIP_STORED)
+        # zip.write (loczip)
+        # zip.close()
 
         # Save config & model
         self.trainer.save_checkpoint(f"{self.cfg.system.results_path}/final_model.ckpt")
@@ -277,6 +327,9 @@ class Vanilla(pl.LightningModule):
             return [opt], [{"scheduler": sch, "interval": "epoch", 'frequency': 5, "monitor": "val_loss_epoch"}]
         elif self.cfg.system.scheduler == 'step':
             sch = StepLR(optimizer=opt, step_size=40, gamma=0.5)
+            return [opt], [{"scheduler": sch, "interval": "epoch"}]
+        elif self.cfg.system.scheduler == 'cos':
+            sch = CosineAnnealingLR(optimizer=opt, T_max=self.cfg.model.epochs)
             return [opt], [{"scheduler": sch, "interval": "epoch"}]
         else:
             return opt
