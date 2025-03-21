@@ -18,7 +18,13 @@ class University1652_CVGL(Dataset):
         self.stage = stage
         self.root = Path(self.cfg.data.root) / stage if stage != 'val' else Path(self.cfg.data.root) / 'test'
         
-        self.transform = timm.data.create_transform(**data_config, is_training=True if stage == 'train' else False)
+        self.transform = timm.data.create_transform(**data_config, 
+                                                    is_training=True if stage == 'train' else False,
+                                                    #  train_crop_mode='random',
+                                                    #  scale=(0.8, 1.0),
+        )
+
+
 
         self.image_pairs = DotMap()
         sat_counter, street_counter = 0, 0
@@ -98,6 +104,9 @@ class University1652_CVGL(Dataset):
             satellite = Image.open(imgs.satellite).convert('RGB')
             streetview = self.transform(streetview)
             satellite = self.transform(satellite)
+
+
+
             return {'streetview': streetview, 'satellite': satellite, 'label': sample.pair}
 
 

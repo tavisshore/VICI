@@ -30,7 +30,7 @@ _C.model.backbone = 'convnext' # 'convnext', 'dinov2
 _C.model.size = 'tiny'
 
 _C.model.image_size = 384
-_C.system.batch_size = 8
+_C.system.batch_size = 32
 _C.model.shared_extractor = False
 _C.model.miner = 'hard'
 
