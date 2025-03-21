@@ -208,6 +208,7 @@ class Vanilla(pl.LightningModule):
         self.val_loss.append(loss)
         self.val_query.append([x.cpu().detach().numpy() for x in street_out])
         self.val_ref.append([x.cpu().detach().numpy() for x in sat_out])
+        self.val_labels.append(batch['label'])
         return loss
     
     def on_validation_epoch_end(self):
