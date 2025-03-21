@@ -64,6 +64,10 @@ def get_backbone(cfg):
             'tiny': {
                 224: 'timm/vit_tiny_patch16_224.augreg_in21k_ft_in1k',
             },
+            'small': {
+                224: 'timm/vit_small_patch16_224.augreg_in21k_ft_in1k',
+                384: 'timm/vit_small_patch16_384.augreg_in21k_ft_in1k'
+            },
             'base': {
                 224: 'timm/vit_base_patch16_224.augreg_in21k_ft_in1k',
                 384: 'timm/vit_base_patch16_384.augreg_in21k_ft_in1k'
