@@ -27,10 +27,10 @@ _C.model = CN()
 _C.model.epochs = 200
 
 _C.model.backbone = 'convnext' # 'convnext', 'dinov2
-_C.model.size = 'base'
+_C.model.size = 'tiny'
 
 _C.model.image_size = 384
-_C.system.batch_size = 3
+_C.system.batch_size = 8
 _C.model.shared_extractor = False
 _C.model.miner = 'hard'
 

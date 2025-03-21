@@ -11,6 +11,7 @@ data:
 
 model:
   size: 'tiny'
+  image_size: 384
   epochs: 200
   shared_extractor: False
   head: 
