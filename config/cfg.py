@@ -14,7 +14,7 @@ _C.system.workers = 4
 _C.system.batch_size = 16
 _C.system.path = str(Path(__file__).parent.parent.resolve())
 _C.system.results_path = _C.system.path + '/results/'
-_C.system.scheduler = 'step' # 'step' or 'plateau'
+_C.system.scheduler = 'step' # 'step' or 'plateau' or 'cos'
 
 _C.data = CN()
 _C.data.root = '/home/shitbox/datasets/University-Release/'
