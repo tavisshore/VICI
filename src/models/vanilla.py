@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 import lightning.pytorch as pl
 from torchvision.models import convnext_tiny, ConvNeXt_Tiny_Weights, convnext_base, ConvNeXt_Base_Weights
 from pytorch_metric_learning import losses, miners
-from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR
+from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR, CosineAnnealingLR
 from torch.nn import functional as F
 import zipfile
 from dotmap import DotMap
