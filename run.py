@@ -21,7 +21,7 @@ for key, value in list(args.items()):
 cfg = get_cfg_defaults()
 cfg.merge_from_file(f'{cfg.system.path}/config/{args["config"]}')
 cfg.merge_from_list(arglist)
-# Why does this create multiple dirs??
+# Why does this create multiple dirs - number of workers? devices??
 cfg.system.results_path = results_dir(cfg)
 
 
@@ -46,7 +46,7 @@ trainer = pl.Trainer(max_epochs=cfg.model.epochs, devices=cfg.system.gpus,
                      num_sanity_val_steps=0,
                      default_root_dir=cfg.system.results_path)
 
-if cfg.system.gpus == 1:
+if cfg.system.gpus == 1 and not cfg.debug:
     tuner = Tuner(trainer)
     if cfg.system.tune.lr: cfg.model.lr = tuner.lr_find(model)
     if cfg.system.tune.batch_size: tuner.scale_batch_size(model, mode='power', init_val=cfg.system.batch_size)

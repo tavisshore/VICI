@@ -12,11 +12,18 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
 def lmdb_stage_keys(lmdb, stage):
+    if stage == 'test':
+        test_keys = []
+        with open(f"src/data/query_street_name.txt", "r") as f:
+            for line in f.readlines():
+                line = line.strip()
+                test_keys.append(line.split('.')[0])
+        test_keys = set(test_keys)
+
     image_pairs = DotMap()
     stage_keys = [x for x in list(lmdb.keys) if x.split('_')[0] == stage]
     for key in stage_keys:
-        view = key.split('_')[1]
-        id = key.split('_')[2]
+        view, id = key.split('_')[1], key.split('_')[2]
 
         if stage != 'test':
             if id not in image_pairs:
@@ -26,11 +33,10 @@ def lmdb_stage_keys(lmdb, stage):
             else:
                 image_pairs[id].satellite = key
         else:
-            if view == 'street':
+            if view == 'street' and id in test_keys:
                 image_pairs[id] = DotMap(streetview=key, name=id)
-            else:
+            elif view == 'satellite':
                 image_pairs[id] = DotMap(satellite=key, name=id)
-                
     return image_pairs
 
 
@@ -91,7 +97,7 @@ if __name__ == '__main__':
 
     lmdb_dataset = ImageDatabase(path=cfg.data.root)
 
-    data = University1652_CVGL(cfg=cfg, stage='train', data_config=data_config, lmdb=lmdb_dataset)
+    data = University1652_CVGL(cfg=cfg, stage='test', data_config=data_config, lmdb=lmdb_dataset)
     item = data.__getitem__(10)
     
 

@@ -18,7 +18,7 @@ _C.system.tune.lr = False
 _C.system.tune.batch_size = False
 _C.system.results_path = _C.system.path + '/results/'
 _C.system.scheduler = 'plateau' # 'step' or 'plateau' or 'cos'
-_C.system.batch_size = 2
+_C.system.batch_size = 8
 
 
 _C.data = CN()
@@ -29,7 +29,7 @@ _C.data.sample_equal = True
 
 
 _C.model = CN()
-_C.model.epochs = 6
+_C.model.epochs = 200
 _C.model.lr = 1e-4
 
 _C.model.backbone = 'convnext' # 'convnext', 'dinov2
