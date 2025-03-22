@@ -93,7 +93,8 @@ class University1652_CVGL(Dataset):
                 satellite = self.transform(satellite)
                 return {'satellite': satellite, 'name': str(imgs.name)}
         else:        
-            streetview = self.lmdb[self.image_pairs[sample.pair].streetview[sample.street_idx]].convert('RGB')
+            index = torch.randint(0, sample.length, (1,)).item()
+            streetview = self.lmdb[self.image_pairs[sample.pair].streetview[index]].convert('RGB')
             satellite = self.lmdb[self.image_pairs[sample.pair].satellite].convert('RGB')
             streetview = self.transform(streetview)
             satellite = self.transform(satellite)
@@ -115,10 +116,6 @@ if __name__ == '__main__':
     data_config = timm.data.resolve_model_data_config(model)
 
     lmdb_dataset = ImageDatabase(path=cfg.data.root)
-
-    data = University1652_CVGL(cfg=cfg, stage='test', data_config=data_config, lmdb=lmdb_dataset)
-    # item = data.__getitem__(10)
-
 
     data = University1652_CVGL(cfg=cfg, stage='test', data_config=data_config, lmdb=lmdb_dataset)
     item = data.__getitem__(10)
