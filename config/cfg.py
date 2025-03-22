@@ -13,8 +13,13 @@ _C.system = CN()
 _C.system.gpus = -1
 _C.system.workers = 4
 _C.system.path = str(Path(__file__).parent.parent.resolve())
+_C.system.tune = CN()
+_C.system.tune.lr = False
+_C.system.tune.batch_size = False
 _C.system.results_path = _C.system.path + '/results/'
 _C.system.scheduler = 'step' # 'step' or 'plateau' or 'cos'
+_C.system.batch_size = 32
+
 
 _C.data = CN()
 _C.data.root = '/home/shitbox/datasets/University-Release/'
@@ -23,14 +28,14 @@ _C.data.sample_equal = True
 
 _C.model = CN()
 _C.model.epochs = 200
+_C.model.lr = 1e-4
 
 _C.model.backbone = 'convnext' # 'convnext', 'dinov2
 _C.model.size = 'tiny'
 
 _C.model.image_size = 384
-_C.system.batch_size = 32
 _C.model.shared_extractor = False
-_C.model.miner = 'hard'
+_C.model.miner = ''
 
 
 _C.model.head = CN()

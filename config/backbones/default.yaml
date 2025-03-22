@@ -2,15 +2,15 @@ exp_name: 'tiny'
 system:
   gpus: 1
   workers: 4
-  batch_size: 4
+  batch_size: 64
 
 data:
   root: '/home/shitbox/datasets/University-Release/'
   sample_equal: True
 
 model:
-  backbone: 'convnext'
-  size: 'tiny'
+  backbone: 'vit'
+  size: 'small'
   image_size: 384
 
   epochs: 200
