@@ -1,4 +1,3 @@
-from pathlib import Path
 import numpy as np
 import torch
 from torch import nn
@@ -12,9 +11,10 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR, CosineAnnealingL
 from torch.nn import functional as F
 import zipfile
 from dotmap import DotMap
-
+from copy import deepcopy
 from src.data.uni import University1652_CVGL
 from src.utils import recall_accuracy, get_backbone
+from src.data.database import ImageDatabase
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -64,14 +64,14 @@ class FeatureExtractor(pl.LightningModule):
 
         self.street_conv = get_backbone(cfg)
         if not cfg.model.shared_extractor:
-            self.sat_conv = self.street_conv
+            self.sat_conv = deepcopy(self.street_conv)
 
         self.data_config = timm.data.resolve_model_data_config(self.street_conv)
 
         if cfg.model.head.use:
             self.street_head = ProjectionHead(cfg.mode.head.params.inter_dims, cfg.mode.head.params.hidden_dims, cfg.mode.head.params.output_dims)
             if not cfg.model.shared_extractor:
-                self.sat_head = self.street_head
+                self.sat_head = deepcopy(self.street_head)
 
     def embed_street(self, pov_tile: torch.Tensor) -> torch.Tensor: 
         x = self.street_conv(pov_tile)
@@ -90,20 +90,24 @@ class Vanilla(pl.LightningModule):
     def __init__(self, cfg):
         super(Vanilla, self).__init__()
         self.cfg = cfg
+        self.lr = cfg.model.lr
+        self.batch_size = cfg.system.batch_size
 
+        self.lmdb_dataset = ImageDatabase(path=cfg.data.root)
+        
         self.model = FeatureExtractor(cfg)
         self.model.to(device)
 
         self.loss_func = losses.NTXentLoss()
         self.mse = nn.MSELoss()
 
-        self.miner = None
-
         if cfg.model.miner == 'hard':
             self.miner_func = miners.BatchEasyHardMiner(
                 pos_strategy='hard', 
                 neg_strategy='hard'
                 )
+        else:
+            self.miner_func = self.exhaustive_triplets
         
         self.train_loss, self.val_loss, self.test_loss = [], [], []
         self.train_query, self.train_ref = [], []
@@ -112,15 +116,15 @@ class Vanilla(pl.LightningModule):
         self.test_outputs = DotMap(streetview=DotMap(), satellite=DotMap())
 
     def train_dataloader(self):
-        train_dataset = University1652_CVGL(self.cfg, stage='train', data_config=self.model.data_config)
+        train_dataset = University1652_CVGL(self.cfg, stage='train', data_config=self.model.data_config, lmdb=self.lmdb_dataset)
         return DataLoader(train_dataset, batch_size=self.cfg.system.batch_size, num_workers=4, shuffle=True)
 
     def val_dataloader(self):
-        val_dataset = University1652_CVGL(self.cfg, stage='val', data_config=self.model.data_config)
+        val_dataset = University1652_CVGL(self.cfg, stage='val', data_config=self.model.data_config, lmdb=self.lmdb_dataset)
         return DataLoader(val_dataset, batch_size=self.cfg.system.batch_size, num_workers=4, shuffle=False)
     
     def test_dataloader(self):
-        self.test_dataset = University1652_CVGL(self.cfg, stage='test', data_config=self.model.data_config)
+        self.test_dataset = University1652_CVGL(self.cfg, stage='test', data_config=self.model.data_config, lmdb=self.lmdb_dataset)
         return DataLoader(self.test_dataset, batch_size=1, num_workers=4, shuffle=False)
     
     def forward(self, street: torch.Tensor = None, sat: torch.Tensor = None, image: torch.Tensor = None, 
@@ -158,7 +162,7 @@ class Vanilla(pl.LightningModule):
         anchors, positives, negatives = anchors[mask], positives[mask], negatives[mask]
         anchors, positives, negatives = anchors.to(device), positives.to(device), negatives.to(device)
         negatives += batch_size
-        return anchors, positives, negatives
+        return (anchors, positives, negatives)
 
     def training_step(self, batch, batch_idx):
         street, sat = batch['streetview'], batch['satellite']
@@ -169,12 +173,8 @@ class Vanilla(pl.LightningModule):
         street_out, sat_out = self(street, sat)
         embs = torch.cat((street_out.float(), sat_out.float()), dim=0)
 
-        if self.miner != None:
-            miner_output = self.miner_func(embs, labels)
-            loss = self.loss_func(embs, indices_tuple=miner_output)
-        else:
-            anchors, positives, negatives = self.exhaustive_triplets(street_out, labels)
-            loss = self.loss_func(embs, indices_tuple=(anchors, positives, negatives))
+        mined_indices = self.miner_func(embs if self.cfg.model.miner else street_out, labels)
+        loss = self.loss_func(embs, indices_tuple=mined_indices)
 
         self.log('train_loss', loss, on_step=True, prog_bar=True, logger=True, sync_dist=True, batch_size=street.shape[0])
         self.train_loss.append(loss) 
@@ -268,7 +268,7 @@ class Vanilla(pl.LightningModule):
             f.write(self.cfg.dump())
         
     def configure_optimizers(self):
-        opt = torch.optim.AdamW(params=self.parameters(), lr=1e-4) 
+        opt = torch.optim.AdamW(params=self.parameters(), lr=self.lr) 
         if self.cfg.system.scheduler == 'plateau':
             sch = ReduceLROnPlateau(optimizer=opt, mode='min', factor=0.5)
             return [opt], [{"scheduler": sch, "interval": "epoch", 'frequency': 5, "monitor": "val_loss_epoch"}]

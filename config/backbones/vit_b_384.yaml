@@ -1,0 +1,12 @@
+exp_name: 'C-T-224'
+system:
+  gpus: 1
+
+model:
+  backbone: 'vit'
+  size: 'base'
+  image_size: 384
+  epochs: 200
+
+
+
