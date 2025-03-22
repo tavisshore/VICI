@@ -10,7 +10,7 @@ _C.config = 'default.yaml'
 _C.data_config = CN()
 
 _C.system = CN()
-_C.system.gpus = -1
+_C.system.gpus = 1
 _C.system.workers = 4
 _C.system.path = str(Path(__file__).parent.parent.resolve())
 _C.system.tune = CN()

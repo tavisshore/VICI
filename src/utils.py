@@ -22,8 +22,9 @@ def recall_accuracy(query, db, labels):
     ks = [1, 5, 10]    
     metrics = {k: 0 for k in ks}
 
-    _, retrievals = tree.query(query, k=db_length)
+    _, retrievals = tree.query(query, k=10)
 
+    # NOTE: How the data is setup currently - only one streetview to one satellite per epoch, randomly selected.
     ground_truths = {}
     for i, label in enumerate(labels):
         if label not in ground_truths:

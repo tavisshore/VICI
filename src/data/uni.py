@@ -28,6 +28,7 @@ def lmdb_stage_keys(lmdb, stage):
         if stage != 'test':
             if id not in image_pairs:
                 image_pairs[id] = DotMap(streetview=[], satellite=None)
+
             if view == 'street':
                 image_pairs[id].streetview.append(key)
             else:
@@ -37,7 +38,8 @@ def lmdb_stage_keys(lmdb, stage):
                 image_pairs[id] = DotMap(streetview=key, name=id)
             elif view == 'satellite':
                 image_pairs[id] = DotMap(satellite=key, name=id)
-    return image_pairs
+
+    return image_pairs, test_keys if stage == 'test' else None
 
 
 class University1652_CVGL(Dataset):
@@ -54,8 +56,16 @@ class University1652_CVGL(Dataset):
         )
 
         self.lmdb = lmdb
-        self.image_pairs = lmdb_stage_keys(lmdb, stage)
-        self.pair_keys = [DotMap(pair=id, length=len(self.image_pairs[id].streetview)) for id in self.image_pairs]
+        self.image_pairs, self.test_keys = lmdb_stage_keys(lmdb, stage)
+        # self.pair_keys = [DotMap(pair=id, length=len(self.image_pairs[id].streetview)) for id in self.image_pairs]
+        # For each streetview image, add to pair keys
+        self.pair_keys = []
+        for id in self.image_pairs:
+            if stage == 'test':
+                self.pair_keys.append(DotMap(pair=id, length=1))
+            else:
+                for i in range(len(self.image_pairs[id].streetview)):
+                    self.pair_keys.append(DotMap(pair=id, street_idx=i))
 
     def __len__(self):
         return len(self.pair_keys)
@@ -73,8 +83,7 @@ class University1652_CVGL(Dataset):
                 satellite = self.transform(satellite)
                 return {'satellite': satellite, 'name': str(imgs.name)}
         else:        
-            index = torch.randint(0, sample.length, (1,)).item()
-            streetview = self.lmdb[self.image_pairs[sample.pair].streetview[index]].convert('RGB')
+            streetview = self.lmdb[self.image_pairs[sample.pair].streetview[sample.street_idx]].convert('RGB')
             satellite = self.lmdb[self.image_pairs[sample.pair].satellite].convert('RGB')
             streetview = self.transform(streetview)
             satellite = self.transform(satellite)
@@ -98,7 +107,8 @@ if __name__ == '__main__':
     lmdb_dataset = ImageDatabase(path=cfg.data.root)
 
     data = University1652_CVGL(cfg=cfg, stage='test', data_config=data_config, lmdb=lmdb_dataset)
-    item = data.__getitem__(10)
-    
+    # item = data.__getitem__(10)
+
+
 
 
