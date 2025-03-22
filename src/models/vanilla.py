@@ -1,4 +1,3 @@
-from pathlib import Path
 import numpy as np
 import torch
 from torch import nn
@@ -15,6 +14,7 @@ from dotmap import DotMap
 from copy import deepcopy
 from src.data.uni import University1652_CVGL
 from src.utils import recall_accuracy, get_backbone
+from src.data.database import ImageDatabase
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -93,13 +93,13 @@ class Vanilla(pl.LightningModule):
         self.lr = cfg.model.lr
         self.batch_size = cfg.system.batch_size
 
+        self.lmdb_dataset = ImageDatabase(path=cfg.data.root)
+        
         self.model = FeatureExtractor(cfg)
         self.model.to(device)
 
         self.loss_func = losses.NTXentLoss()
         self.mse = nn.MSELoss()
-
-        self.miner = None
 
         if cfg.model.miner == 'hard':
             self.miner_func = miners.BatchEasyHardMiner(
@@ -116,15 +116,15 @@ class Vanilla(pl.LightningModule):
         self.test_outputs = DotMap(streetview=DotMap(), satellite=DotMap())
 
     def train_dataloader(self):
-        train_dataset = University1652_CVGL(self.cfg, stage='train', data_config=self.model.data_config)
+        train_dataset = University1652_CVGL(self.cfg, stage='train', data_config=self.model.data_config, lmdb=self.lmdb_dataset)
         return DataLoader(train_dataset, batch_size=self.cfg.system.batch_size, num_workers=4, shuffle=True)
 
     def val_dataloader(self):
-        val_dataset = University1652_CVGL(self.cfg, stage='val', data_config=self.model.data_config)
+        val_dataset = University1652_CVGL(self.cfg, stage='val', data_config=self.model.data_config, lmdb=self.lmdb_dataset)
         return DataLoader(val_dataset, batch_size=self.cfg.system.batch_size, num_workers=4, shuffle=False)
     
     def test_dataloader(self):
-        self.test_dataset = University1652_CVGL(self.cfg, stage='test', data_config=self.model.data_config)
+        self.test_dataset = University1652_CVGL(self.cfg, stage='test', data_config=self.model.data_config, lmdb=self.lmdb_dataset)
         return DataLoader(self.test_dataset, batch_size=1, num_workers=4, shuffle=False)
     
     def forward(self, street: torch.Tensor = None, sat: torch.Tensor = None, image: torch.Tensor = None, 
@@ -173,7 +173,7 @@ class Vanilla(pl.LightningModule):
         street_out, sat_out = self(street, sat)
         embs = torch.cat((street_out.float(), sat_out.float()), dim=0)
 
-        mined_indices = self.miner_func(embs if self.miner else street_out, labels)
+        mined_indices = self.miner_func(embs if self.cfg.model.miner else street_out, labels)
         loss = self.loss_func(embs, indices_tuple=mined_indices)
 
         self.log('train_loss', loss, on_step=True, prog_bar=True, logger=True, sync_dist=True, batch_size=street.shape[0])

@@ -48,11 +48,11 @@ def get_backbone(cfg):
     backbones = {
         'convnext': {
             'tiny': {
-                224: 'timm/convnextv2_tiny.fcmae_ft_in22k_in1k_224',
+                224: 'timm/convnextv2_tiny.fcmae_ft_in22k_in1k',
                 384: 'timm/convnextv2_tiny.fcmae_ft_in22k_in1k_384'
             },
             'base': {
-                224: 'timm/convnextv2_base.fcmae_ft_in22k_in1k_224',
+                224: 'timm/convnextv2_base.fcmae_ft_in22k_in1k',
                 384: 'timm/convnextv2_base.fcmae_ft_in22k_in1k_384'
             }
         },  
