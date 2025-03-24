@@ -196,6 +196,7 @@ class Vanilla(pl.LightningModule):
         train_labels = [item for sublist in self.train_labels for item in sublist]
         query = np.concatenate(self.train_query, axis=0)
         ref = np.concatenate(self.train_ref, axis=0)
+
         metrics = recall_accuracy(query, ref, train_labels)
         for i in [1, 5, 10]: self.log(f'train_{i}', metrics[i], on_epoch=True, prog_bar=False, logger=True, sync_dist=True) 
         self.train_loss, self.train_query, self.train_ref = [], [], []
@@ -246,7 +247,7 @@ class Vanilla(pl.LightningModule):
 
     def on_test_epoch_end(self):
         # Get top-10 retrievals for each streetview image and save names to file
-        streetview_keys = list(self.test_outputs['streetview'].keys()) 
+        streetview_keys = list(self.test_outputs['streetview'].keys())
         satellite_keys = list(self.test_outputs['satellite'].keys())
         streetview_embeddings = [self.test_outputs['streetview'][x] for x in streetview_keys]
         satellite_embeddings = [self.test_outputs['satellite'][x] for x in satellite_keys]
@@ -264,9 +265,13 @@ class Vanilla(pl.LightningModule):
                 for s in sim[:10]:
                     f.write(f"{satellite_keys[s]}\t")
                 f.write("\n")
+        f.close()
+
+        # Zip answer file
         loczip = f'{self.cfg.system.results_path}/answer.zip'
         with zipfile.ZipFile(loczip, "w", compression=zipfile.ZIP_STORED) as myzip:
             myzip.write(answer_file, arcname="answer.txt")
+        myzip.close()
 
         # Save config & model
         self.trainer.save_checkpoint(f"{self.cfg.system.results_path}/final_model.ckpt")
