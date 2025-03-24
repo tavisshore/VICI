@@ -7,7 +7,7 @@ system:
 model:
   backbone: 'convnext'
   size: 'tiny'
-  image_size: 384
+  image_size: 224
 
 
 

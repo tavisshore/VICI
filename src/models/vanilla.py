@@ -5,7 +5,8 @@ from torch.utils.data import DataLoader
 import lightning.pytorch as pl
 
 import timm 
-from pytorch_metric_learning import losses, miners
+from pytorch_metric_learning import losses
+from pytorch_metric_learning.miners import BatchEasyHardMiner
 from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR, CosineAnnealingLR
 
 from torch.nn import functional as F
@@ -98,16 +99,14 @@ class Vanilla(pl.LightningModule):
         self.model = FeatureExtractor(cfg)
         self.model.to(device)
 
-        self.loss_func = losses.NTXentLoss()
-        self.mse = nn.MSELoss()
-
-        if cfg.model.miner == 'hard':
-            self.miner_func = miners.BatchEasyHardMiner(
-                pos_strategy='hard', 
-                neg_strategy='hard'
-                )
+        if cfg.model.miner:
+            assert cfg.model.miner in ['easy', 'semihard', 'hard', 'all'], f"Miner {cfg.model.miner} not supported"
+            self.miner_func = BatchEasyHardMiner(pos_strategy=cfg.model.miner, neg_strategy=cfg.model.miner)
         else:
             self.miner_func = self.exhaustive_triplets
+
+        self.loss_func = losses.NTXentLoss(temperature=0.1)
+        self.mse = nn.MSELoss()
         
         self.train_loss, self.val_loss, self.test_loss = [], [], []
         self.train_query, self.train_ref = [], []
@@ -146,8 +145,9 @@ class Vanilla(pl.LightningModule):
         sat_out = F.normalize(sat_out, p=2, dim=1)
         return street_out, sat_out
 
-    def exhaustive_triplets(self, street: torch.Tensor, labels: torch.Tensor):
-        batch_size = street.shape[0]
+    def exhaustive_triplets(self, street_out=None, labs=None, sat_out=None, ref_labs=None):
+        # Changing to (pos_pairs, neg_pairs) for NTXentLoss
+        batch_size = street_out.shape[0]
 
         oppose = batch_size - 1
         anchors = torch.arange(batch_size).repeat_interleave(oppose)
@@ -157,30 +157,36 @@ class Vanilla(pl.LightningModule):
             for i in range(batch_size)
         ]).reshape(batch_size, -1)[:, :oppose].flatten()
 
-        label_tensor = torch.tensor([hash(label) for label in labels])  
+        label_tensor = torch.tensor([hash(label) for label in labs])  
         mask = label_tensor[anchors] != label_tensor[negatives]
         anchors, positives, negatives = anchors[mask], positives[mask], negatives[mask]
         anchors, positives, negatives = anchors.to(device), positives.to(device), negatives.to(device)
         negatives += batch_size
-        return (anchors, positives, negatives)
+
+        return anchors, positives, negatives
 
     def training_step(self, batch, batch_idx):
         street, sat = batch['streetview'], batch['satellite']
-        labels = batch['label']
+        id_labels = batch['label']
         sat = sat.to(device)
         street = street.to(device)
 
         street_out, sat_out = self(street, sat)
-        embs = torch.cat((street_out.float(), sat_out.float()), dim=0)
-
-        mined_indices = self.miner_func(embs if self.cfg.model.miner else street_out, labels)
-        loss = self.loss_func(embs, indices_tuple=mined_indices)
+        
+        if self.cfg.model.miner:
+            labs = torch.arange(start=0, end=street_out.shape[0])
+            mined_indices = self.miner_func(street_out, labs, sat_out, labs)
+            loss = self.loss_func(embeddings=street_out, labels=mined_indices[2], ref_emb=sat_out, ref_labels=mined_indices[3])
+        else:
+            embs = torch.cat((street_out.float(), sat_out.float()), dim=0)
+            mined_indices = self.miner_func(street_out, id_labels)
+            loss = self.loss_func(embs, indices_tuple=mined_indices)
 
         self.log('train_loss', loss, on_step=True, prog_bar=True, logger=True, sync_dist=True, batch_size=street.shape[0])
         self.train_loss.append(loss) 
         self.train_query.append([x.cpu().detach().numpy() for x in street_out])
         self.train_ref.append([x.cpu().detach().numpy() for x in sat_out])
-        self.train_labels.append(labels)
+        self.train_labels.append(id_labels)
         return loss
     
     def on_train_epoch_end(self):
