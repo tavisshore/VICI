@@ -1,5 +1,6 @@
 from yacs.config import CfgNode as CN
 from pathlib import Path
+import getpass
 
 # Alter dataset root path
 
@@ -22,7 +23,7 @@ _C.system.batch_size = 8
 
 
 _C.data = CN()
-_C.data.root = '/home/shitbox/datasets/lmdb/'
+_C.data.root = f'/home/{getpass.getuser()}/datasets/challenge/lmdb/'
 _C.data.type = 'lmdb' # 'lmdb', 'folder'
 _C.data.sample_equal = True
 
@@ -36,7 +37,7 @@ _C.model.backbone = 'convnext' # 'convnext', 'dinov2
 _C.model.size = 'tiny'
 _C.model.image_size = 384
 _C.model.shared_extractor = False
-_C.model.miner = ''
+_C.model.miner = 'hard'
 
 
 _C.model.head = CN()
