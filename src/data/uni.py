@@ -36,20 +36,17 @@ def lmdb_stage_keys(lmdb, stage):
         if stage != 'test':
             if id not in image_pairs:
                 image_pairs[id] = DotMap(streetview=[], satellite=None)
-
             if view == 'street':
                 image_pairs[id].streetview.append(key)
             else:
                 image_pairs[id].satellite = key
         else:
             if view == 'street' and id in test_keys:
-            if view == 'street' and id in test_keys:
                 image_pairs[id] = DotMap(streetview=key, name=id)
             elif view == 'satellite':
-            elif view == 'satellite':
                 image_pairs[id] = DotMap(satellite=key, name=id)
-
-    return image_pairs, test_keys if stage == 'test' else None
+                
+    return image_pairs
 
 
 class University1652_CVGL(Dataset):
@@ -66,16 +63,8 @@ class University1652_CVGL(Dataset):
         )
 
         self.lmdb = lmdb
-        self.image_pairs, self.test_keys = lmdb_stage_keys(lmdb, stage)
-        # self.pair_keys = [DotMap(pair=id, length=len(self.image_pairs[id].streetview)) for id in self.image_pairs]
-        # For each streetview image, add to pair keys
-        self.pair_keys = []
-        for id in self.image_pairs:
-            if stage == 'test':
-                self.pair_keys.append(DotMap(pair=id, length=1))
-            else:
-                for i in range(len(self.image_pairs[id].streetview)):
-                    self.pair_keys.append(DotMap(pair=id, street_idx=i))
+        self.image_pairs = lmdb_stage_keys(lmdb, stage)
+        self.pair_keys = [DotMap(pair=id, length=len(self.image_pairs[id].streetview)) for id in self.image_pairs]
 
     def __len__(self):
         return len(self.pair_keys)
@@ -100,15 +89,13 @@ class University1652_CVGL(Dataset):
             satellite = self.transform(satellite)
             return {'streetview': streetview, 'satellite': satellite, 'label': sample.pair}
 
-
-
             
 if __name__ == '__main__':
     from yacs.config import CfgNode as CN
     from database import ImageDatabase
     cfg = CN()
     cfg.data = CN()
-    cfg.data.root = '/home/shitbox/datasets/lmdb/'
+    cfg.data.root = '/home/tavis/datasets/challenge/lmdb/'
     cfg.data.augment = True
 
 
@@ -119,6 +106,9 @@ if __name__ == '__main__':
 
     data = University1652_CVGL(cfg=cfg, stage='test', data_config=data_config, lmdb=lmdb_dataset)
     item = data.__getitem__(10)
-    
+
+
+
+
 
 

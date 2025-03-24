@@ -247,7 +247,7 @@ class Vanilla(pl.LightningModule):
 
     def on_test_epoch_end(self):
         # Get top-10 retrievals for each streetview image and save names to file
-        streetview_keys = self.test_dataset.test_keys
+        streetview_keys = list(self.test_outputs['streetview'].keys())
         satellite_keys = list(self.test_outputs['satellite'].keys())
         streetview_embeddings = [self.test_outputs['streetview'][x] for x in streetview_keys]
         satellite_embeddings = [self.test_outputs['satellite'][x] for x in satellite_keys]
