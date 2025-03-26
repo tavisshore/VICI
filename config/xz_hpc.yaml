@@ -14,7 +14,7 @@ model:
   backbone: 'vit'
   size: 'base'
   image_size: 384
-  epochs: 10
+  epochs: 20
 
 
 
