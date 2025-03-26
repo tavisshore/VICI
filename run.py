@@ -6,6 +6,8 @@ from lightning.pytorch.tuner.tuning import Tuner
 from src.models.vanilla import Vanilla
 from config.cfg import get_cfg_defaults
 from src.utils import results_dir
+
+
 pl.seed_everything(42)
 
 args = argparse.ArgumentParser()
@@ -21,30 +23,34 @@ for key, value in list(args.items()):
 cfg = get_cfg_defaults()
 cfg.merge_from_file(f'{cfg.system.path}/config/{args["config"]}')
 cfg.merge_from_list(arglist)
+
 # Why does this create multiple dirs - number of workers? devices??
 cfg.system.results_path = results_dir(cfg)
 
 
 if not cfg.debug:
-    wandb_logger = plg.WandbLogger(entity="UAVM", project="CVGL", save_dir=f'{cfg.system.results_path}/', log_model=False,
-                                   name=cfg.exp_name)
+    wandb_logger = plg.WandbLogger(entity="UAVM", project="CVGL", save_dir=f'{cfg.system.results_path}/', log_model=False, name=cfg.exp_name)
     wandb_logger.log_hyperparams(cfg)
 else:
-    cfg.system.batch_size = 8
-    cfg.model.epochs, cfg.system.gpus = 2, 1
+    cfg.system.batch_size = 32
+    cfg.model.epochs = 3
+    cfg.system.gpus = 4
     wandb_logger = None
 
-checkpoint_callback = ModelCheckpoint(monitor="val_mean", mode="max", dirpath=f'{cfg.system.results_path}/ckpts/', save_top_k=1,
-                                      filename='{epoch}-{val_mean:.2f}')
+checkpoint_callback = ModelCheckpoint(monitor="val_mean", mode="max", dirpath=f'{cfg.system.results_path}/ckpts/', save_top_k=1, filename='{epoch}-{val_mean:.2f}')
 
 model = Vanilla(cfg)
+
 trainer = pl.Trainer(max_epochs=cfg.model.epochs, devices=cfg.system.gpus, 
                      logger=wandb_logger if not cfg.debug else None,
                      callbacks=[checkpoint_callback],
                      check_val_every_n_epoch=2,
                      overfit_batches=4 if cfg.debug else 0,
                      num_sanity_val_steps=0,
+                     strategy='auto',
                      default_root_dir=cfg.system.results_path)
+
+# print(f"Hey, I am rank {local_rank}")
 
 if cfg.system.gpus == 1 and not cfg.debug:
     tuner = Tuner(trainer)
@@ -53,6 +59,10 @@ if cfg.system.gpus == 1 and not cfg.debug:
         
 trainer.fit(model)
 
-trainer = pl.Trainer(devices=1, default_root_dir=cfg.system.results_path, callbacks=[checkpoint_callback])
-trainer.test(model, ckpt_path=checkpoint_callback.best_model_path)
+
+if trainer.local_rank == 0:
+    trainer = pl.Trainer(devices=1, default_root_dir=cfg.system.results_path, callbacks=[checkpoint_callback])
+    trainer.test(model, ckpt_path=checkpoint_callback.best_model_path)
+else: # Nothing to do in other rank, just put as a barrier here.
+    pass
 

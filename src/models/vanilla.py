@@ -116,18 +116,17 @@ class Vanilla(pl.LightningModule):
 
     def train_dataloader(self):
         train_dataset = University1652_CVGL(self.cfg, stage='train', data_config=self.model.data_config, lmdb=self.lmdb_dataset)
-        return DataLoader(train_dataset, batch_size=self.cfg.system.batch_size, num_workers=4, shuffle=True)
+        return DataLoader(train_dataset, batch_size=self.cfg.system.batch_size, num_workers=self.cfg.system.workers, shuffle=True)
 
     def val_dataloader(self):
         val_dataset = University1652_CVGL(self.cfg, stage='val', data_config=self.model.data_config, lmdb=self.lmdb_dataset)
-        return DataLoader(val_dataset, batch_size=self.cfg.system.batch_size, num_workers=4, shuffle=False)
+        return DataLoader(val_dataset, batch_size=self.cfg.system.batch_size, num_workers=self.cfg.system.workers, shuffle=False)
     
     def test_dataloader(self):
         self.test_dataset = University1652_CVGL(self.cfg, stage='test', data_config=self.model.data_config, lmdb=self.lmdb_dataset)
-        return DataLoader(self.test_dataset, batch_size=1, num_workers=4, shuffle=False)
+        return DataLoader(self.test_dataset, batch_size=1, num_workers=self.cfg.system.workers, shuffle=False)
     
-    def forward(self, street: torch.Tensor = None, sat: torch.Tensor = None, image: torch.Tensor = None, 
-                branch: str = 'streetview', stage: str = 'train'):
+    def forward(self, street: torch.Tensor = None, sat: torch.Tensor = None, image: torch.Tensor = None, branch: str = 'streetview', stage: str = 'train'):
         if stage == 'test':
             if branch == 'streetview' or self.cfg.model.shared_extractor:
                 x = self.model.embed_street(image)
