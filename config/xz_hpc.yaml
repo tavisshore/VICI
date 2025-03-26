@@ -2,10 +2,12 @@ exp_name: 'hpc_4xGPU'
 
 system:
   gpus: 4
-  workers: 1
+  workers: 0
   batch_size: 32
   path: '/work1/wshah/xzhang/challenge'
   results_path: '/work1/wshah/xzhang/challenge/src/results/'
+  amd_cluster: True
+  scheduler: 'cos'
 
 data:
   root: '/work1/wshah/xzhang/data'
@@ -14,7 +16,7 @@ model:
   backbone: 'vit'
   size: 'base'
   image_size: 384
-  epochs: 20
+  epochs: 5
 
 
 

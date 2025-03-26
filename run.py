@@ -29,11 +29,17 @@ cfg.system.results_path = results_dir(cfg)
 
 
 if not cfg.debug:
-    wandb_logger = plg.WandbLogger(entity="UAVM", project="CVGL", save_dir=f'{cfg.system.results_path}/', log_model=False, name=cfg.exp_name)
-    wandb_logger.log_hyperparams(cfg)
+    # This is a dumb one. Don't know why DDP on AMD gonna freeze wandb logger
+    # So choose to disable it on AMD cluster while on DDP
+    if cfg.system.amd_cluster and cfg.system.gpus > 1:
+        wandb_logger = None
+    else:
+        wandb_logger = plg.WandbLogger(entity="UAVM", project="CVGL", save_dir=f'{cfg.system.results_path}/', log_model=False, name=cfg.exp_name)
+        wandb_logger.log_hyperparams(cfg)
+
 else:
-    cfg.system.batch_size = 32
-    cfg.model.epochs = 3
+    cfg.system.batch_size = 128
+    cfg.model.epochs = 10
     cfg.system.gpus = 4
     wandb_logger = None
 

@@ -3,8 +3,9 @@ from pathlib import Path
 import numpy as np
 from scipy.spatial import KDTree
 import timm 
+from lightning.pytorch.utilities.rank_zero import rank_zero_only
 
-
+@rank_zero_only
 def results_dir(cfg):
     folder = [f.name for f in Path(cfg.system.results_path).iterdir() if f.is_dir()]
     folder = [int(f) for f in folder if f.isdigit()]
