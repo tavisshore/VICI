@@ -66,6 +66,8 @@ if cfg.system.gpus == 1 and not cfg.debug:
 trainer.fit(model)
 
 
+###
+# TODO: re-write here to use rank_0 decorate to have more elegant code
 if trainer.local_rank == 0:
     trainer = pl.Trainer(devices=1, default_root_dir=cfg.system.results_path, callbacks=[checkpoint_callback])
     trainer.test(model, ckpt_path=checkpoint_callback.best_model_path)
