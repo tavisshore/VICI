@@ -13,10 +13,13 @@ data:
   root: '/work1/wshah/xzhang/data'
 
 model:
-  backbone: 'vit'
+  shared_extractor: True
+  backbone: 'convnext'
   size: 'base'
-  image_size: 384
-  epochs: 100
+  image_size: 224
+  epochs: 400
+  lr: 1e-4
+  miner: False
 
 
 

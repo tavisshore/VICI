@@ -41,7 +41,7 @@ _C.model.backbone = 'convnext' # 'convnext', 'dinov2
 _C.model.size = 'tiny'
 _C.model.image_size = 384
 _C.model.shared_extractor = False
-_C.model.miner = 'hard'
+_C.model.miner = False
 
 
 _C.model.head = CN()
