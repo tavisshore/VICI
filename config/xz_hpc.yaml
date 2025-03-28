@@ -13,11 +13,11 @@ data:
   root: '/work1/wshah/xzhang/data'
 
 model:
-  shared_extractor: True
+  shared_extractor: False
   backbone: 'convnext'
   size: 'base'
   image_size: 224
-  epochs: 400
+  epochs: 500
   lr: 1e-4
   miner: False
 

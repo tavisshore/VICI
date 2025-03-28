@@ -39,9 +39,9 @@ if not cfg.debug:
         wandb_logger.log_hyperparams(cfg)
 
 else:
-    cfg.system.batch_size = 128
-    cfg.model.epochs = 10
-    cfg.system.gpus = 4
+    cfg.system.batch_size = 32
+    cfg.model.epochs = 5
+    cfg.system.gpus = 1
     wandb_logger = None
 
 checkpoint_callback = ModelCheckpoint(monitor="val_mean", mode="max", dirpath=f'{cfg.system.results_path}/ckpts/', save_top_k=1, filename='{epoch}-{val_mean:.2f}')

@@ -229,8 +229,13 @@ class SSL(pl.LightningModule):
         self.test_outputs[branch][batch['name'][0]] = x_out
 
     def on_test_epoch_end(self):
+        streetview_keys = []
+        with open(f"src/data/query_street_name.txt", "r") as f:
+            for line in f.readlines():
+                line = line.strip()
+                streetview_keys.append(line.split('.')[0])
         # Get top-10 retrievals for each streetview image and save names to file
-        streetview_keys = list(self.test_outputs['streetview'].keys())
+        # streetview_keys = list(self.test_outputs['streetview'].keys())
         satellite_keys = list(self.test_outputs['satellite'].keys())
         streetview_embeddings = [self.test_outputs['streetview'][x] for x in streetview_keys]
         satellite_embeddings = [self.test_outputs['satellite'][x] for x in satellite_keys]
@@ -240,6 +245,8 @@ class SSL(pl.LightningModule):
         # Calculate cosine similarity between streetview and satellite embeddings
         similarity = np.dot(streetview, satellite.T)
         similarity = np.argsort(similarity, axis=1)
+
+        # print(streetview_keys)
 
         # Save top-10 retrievals to file
         answer_file = f'{self.cfg.system.results_path}/answer.txt'
