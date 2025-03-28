@@ -257,7 +257,6 @@ class SSL(pl.LightningModule):
                 for s in sim[-10:][::-1]: # Get 10 largest sim and reverse order (largest first)
                     f.write(f"{satellite_keys[s]}\t")
                 f.write("\n")
-        f.close()
 
         # Zip answer file
         loczip = f'{self.cfg.system.results_path}/answer.zip'
