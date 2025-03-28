@@ -239,6 +239,8 @@ class SSL(pl.LightningModule):
         satellite_keys = list(self.test_outputs['satellite'].keys())
         streetview_embeddings = [self.test_outputs['streetview'][x] for x in streetview_keys]
         satellite_embeddings = [self.test_outputs['satellite'][x] for x in satellite_keys]
+        print(f'# query street images: ', len(streetview_embeddings))
+        print(f'# gallery satellite images: ', len(satellite_embeddings))
         streetview = np.concatenate(streetview_embeddings)
         satellite = np.concatenate(satellite_embeddings)
 
@@ -252,7 +254,7 @@ class SSL(pl.LightningModule):
         answer_file = f'{self.cfg.system.results_path}/answer.txt'
         with open(answer_file, 'w') as f:
             for sim in similarity:
-                for s in sim[:10]:
+                for s in sim[-10:][::-1]: # Get 10 largest sim and reverse order (largest first)
                     f.write(f"{satellite_keys[s]}\t")
                 f.write("\n")
         f.close()
