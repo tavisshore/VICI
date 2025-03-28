@@ -20,13 +20,14 @@ def lmdb_stage_keys(lmdb, stage):
                 test_keys.append(line.split('.')[0])
         test_keys = set(test_keys)
 
-    if stage == 'test':
-        test_keys = []
-        with open(f"src/data/query_street_name.txt", "r") as f:
-            for line in f.readlines():
-                line = line.strip()
-                test_keys.append(line.split('.')[0])
-        test_keys = set(test_keys)
+    # This is identical to code above. 
+    # if stage == 'test':
+    #     test_keys = []
+    #     with open(f"src/data/query_street_name.txt", "r") as f:
+    #         for line in f.readlines():
+    #             line = line.strip()
+    #             test_keys.append(line.split('.')[0])
+    #     test_keys = set(test_keys)
 
     image_pairs = DotMap()
     stage_keys = [x for x in list(lmdb.keys) if x.split('_')[0] == stage]

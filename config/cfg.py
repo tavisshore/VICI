@@ -21,6 +21,10 @@ _C.system.results_path = _C.system.path + '/results/'
 _C.system.scheduler = 'plateau' # 'step' or 'plateau' or 'cos'
 _C.system.batch_size = 8
 
+# This is a dumb paramerter. 
+# But I need to disable wandb logger in this cluser to avoid freezing
+_C.system.amd_cluster = True
+
 
 _C.data = CN()
 _C.data.root = f'/home/{getpass.getuser()}/datasets/challenge/lmdb/'
@@ -37,7 +41,7 @@ _C.model.backbone = 'convnext' # 'convnext', 'dinov2
 _C.model.size = 'tiny'
 _C.model.image_size = 384
 _C.model.shared_extractor = False
-_C.model.miner = 'hard'
+_C.model.miner = False
 
 
 _C.model.head = CN()

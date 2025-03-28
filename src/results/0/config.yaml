@@ -1,0 +1,33 @@
+config: xz_hpc.yaml
+data:
+  root: /work1/wshah/xzhang/data
+  sample_equal: true
+  type: lmdb
+data_config: {}
+debug: false
+exp_name: hpc_4xGPU
+model:
+  backbone: convnext
+  epochs: 400
+  head:
+    params:
+      hidden_dims: 1024
+      inter_dims: 1024
+      output_dims: 1024
+    use: false
+  image_size: 224
+  lr: 0.0001
+  miner: false
+  shared_extractor: true
+  size: base
+system:
+  amd_cluster: true
+  batch_size: 32
+  gpus: 4
+  path: /work1/wshah/xzhang/challenge
+  results_path: /work1/wshah/xzhang/challenge/src/results/0
+  scheduler: cos
+  tune:
+    batch_size: false
+    lr: false
+  workers: 0

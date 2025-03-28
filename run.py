@@ -4,6 +4,7 @@ from lightning.pytorch import loggers as plg
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.tuner.tuning import Tuner
 from src.models.vanilla import Vanilla
+from src.models.ssl import SSL
 from config.cfg import get_cfg_defaults
 from src.utils import results_dir
 
@@ -29,17 +30,24 @@ cfg.system.results_path = results_dir(cfg)
 
 
 if not cfg.debug:
-    wandb_logger = plg.WandbLogger(entity="UAVM", project="CVGL", save_dir=f'{cfg.system.results_path}/', log_model=False, name=cfg.exp_name)
-    wandb_logger.log_hyperparams(cfg)
+    # This is a dumb one. Don't know why DDP on AMD gonna freeze wandb logger
+    # So choose to disable it on AMD cluster while on DDP
+    if cfg.system.amd_cluster and cfg.system.gpus > 1:
+        wandb_logger = None
+    else:
+        wandb_logger = plg.WandbLogger(entity="UAVM", project="CVGL", save_dir=f'{cfg.system.results_path}/', log_model=False, name=cfg.exp_name)
+        wandb_logger.log_hyperparams(cfg)
+
 else:
     cfg.system.batch_size = 32
-    cfg.model.epochs = 3
-    cfg.system.gpus = 4
+    cfg.model.epochs = 5
+    cfg.system.gpus = 1
     wandb_logger = None
 
 checkpoint_callback = ModelCheckpoint(monitor="val_mean", mode="max", dirpath=f'{cfg.system.results_path}/ckpts/', save_top_k=1, filename='{epoch}-{val_mean:.2f}')
 
-model = Vanilla(cfg)
+# model = Vanilla(cfg)
+model = SSL(cfg)
 
 trainer = pl.Trainer(max_epochs=cfg.model.epochs, devices=cfg.system.gpus, 
                      logger=wandb_logger if not cfg.debug else None,
@@ -48,9 +56,10 @@ trainer = pl.Trainer(max_epochs=cfg.model.epochs, devices=cfg.system.gpus,
                      overfit_batches=4 if cfg.debug else 0,
                      num_sanity_val_steps=0,
                      strategy='auto',
-                     default_root_dir=cfg.system.results_path)
-
-# print(f"Hey, I am rank {local_rank}")
+                     default_root_dir=cfg.system.results_path,
+                    #  gradient_clip_val=0.5, 
+                    #  gradient_clip_algorithm="value",
+                     )
 
 if cfg.system.gpus == 1 and not cfg.debug:
     tuner = Tuner(trainer)
@@ -60,6 +69,8 @@ if cfg.system.gpus == 1 and not cfg.debug:
 trainer.fit(model)
 
 
+###
+# TODO: re-write here to use rank_0 decorate to have more elegant code
 if trainer.local_rank == 0:
     trainer = pl.Trainer(devices=1, default_root_dir=cfg.system.results_path, callbacks=[checkpoint_callback])
     trainer.test(model, ckpt_path=checkpoint_callback.best_model_path)
