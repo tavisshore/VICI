@@ -8,7 +8,7 @@ debug: false
 exp_name: hpc_4xGPU
 model:
   backbone: convnext
-  epochs: 400
+  epochs: 20
   head:
     params:
       hidden_dims: 1024
@@ -18,7 +18,7 @@ model:
   image_size: 224
   lr: 0.0001
   miner: false
-  shared_extractor: true
+  shared_extractor: false
   size: base
 system:
   amd_cluster: true
