@@ -1,8 +1,8 @@
 exp_name: 'hpc_4xGPU'
 
 system:
-  gpus: 4
-  workers: 0
+  gpus: 1
+  workers: 2
   batch_size: 32
   path: '/work1/wshah/xzhang/challenge'
   results_path: '/work1/wshah/xzhang/challenge/src/results/'
@@ -10,7 +10,7 @@ system:
   scheduler: 'cos'
 
 data:
-  root: '/work1/wshah/xzhang/data'
+  root: '/work1/wshah/xzhang/data/university-1652/University-1652'
 
 model:
   shared_extractor: False

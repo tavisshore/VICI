@@ -32,7 +32,7 @@ cfg.system.results_path = results_dir(cfg)
 if not cfg.debug:
     # This is a dumb one. Don't know why DDP on AMD gonna freeze wandb logger
     # So choose to disable it on AMD cluster while on DDP
-    if cfg.system.amd_cluster and cfg.system.gpus > 1:
+    if cfg.system.amd_cluster:
         wandb_logger = None
     else:
         wandb_logger = plg.WandbLogger(entity="UAVM", project="CVGL", save_dir=f'{cfg.system.results_path}/', log_model=False, name=cfg.exp_name)
@@ -68,12 +68,11 @@ if cfg.system.gpus == 1 and not cfg.debug:
         
 trainer.fit(model)
 
-
 ###
 # TODO: re-write here to use rank_0 decorate to have more elegant code
 if trainer.local_rank == 0:
     trainer = pl.Trainer(devices=1, default_root_dir=cfg.system.results_path, callbacks=[checkpoint_callback])
+    trainer.validate(model, ckpt_path=checkpoint_callback.best_model_path)
     trainer.test(model, ckpt_path=checkpoint_callback.best_model_path)
 else: # Nothing to do in other rank, just put as a barrier here.
     pass
-

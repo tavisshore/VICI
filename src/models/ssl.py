@@ -13,8 +13,9 @@ from torch.nn import functional as F
 import zipfile
 from dotmap import DotMap
 from copy import deepcopy
-from src.data.uni import University1652_CVGL
+from src.data.u1652 import University1652_CVGL
 from src.utils import recall_accuracy, get_backbone
+from src.eval import evaluate
 from src.data.database import ImageDatabase
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -62,6 +63,9 @@ class FeatureExtractor(pl.LightningModule):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
+
+        # self.street_conv = get_backbone(cfg)
+        # self.sat_conv = get_backbone(cfg)
 
         self.street_conv = get_backbone(cfg)
         if not cfg.model.shared_extractor:
@@ -112,24 +116,28 @@ class SSL(pl.LightningModule):
         
         self.train_loss, self.val_loss, self.test_loss = [], [], []
         self.train_query, self.train_ref = [], []
-        self.val_query, self.val_ref = [], []
+        
+        
+        self.val_query_features, self.val_ref_features = [], []
+        self.val_query_ids, self.val_ref_ids = [], []
         self.train_labels, self.val_labels = [], []
+        
         self.test_outputs = DotMap(streetview=DotMap(), satellite=DotMap())
 
     def train_dataloader(self):
-        train_dataset = University1652_CVGL(self.cfg, stage='train', data_config=self.model.data_config, lmdb=self.lmdb_dataset)
+        train_dataset = University1652_CVGL(self.cfg, stage='train', data_config=self.model.data_config)
         return DataLoader(train_dataset, batch_size=self.cfg.system.batch_size, num_workers=self.cfg.system.workers, shuffle=True)
 
     def val_dataloader(self):
-        val_dataset = University1652_CVGL(self.cfg, stage='val', data_config=self.model.data_config, lmdb=self.lmdb_dataset)
-        return DataLoader(val_dataset, batch_size=self.cfg.system.batch_size, num_workers=self.cfg.system.workers, shuffle=False)
+        val_dataset = University1652_CVGL(self.cfg, stage='val', data_config=self.model.data_config)
+        return DataLoader(val_dataset, batch_size=1, num_workers=self.cfg.system.workers, shuffle=False)
     
     def test_dataloader(self):
-        self.test_dataset = University1652_CVGL(self.cfg, stage='test', data_config=self.model.data_config, lmdb=self.lmdb_dataset)
+        self.test_dataset = University1652_CVGL(self.cfg, stage='test', data_config=self.model.data_config)
         return DataLoader(self.test_dataset, batch_size=1, num_workers=self.cfg.system.workers, shuffle=False)
     
     def forward(self, street: torch.Tensor = None, sat: torch.Tensor = None, image: torch.Tensor = None, branch: str = 'streetview', stage: str = 'train'):
-        if stage == 'test':
+        if stage == 'test' or stage == 'val':
             if branch == 'streetview' or self.cfg.model.shared_extractor:
                 x = self.model.embed_street(image)
             else:
@@ -181,43 +189,66 @@ class SSL(pl.LightningModule):
         ref = np.concatenate(self.train_ref, axis=0)
 
         metrics = recall_accuracy(query, ref, train_labels)
+
         for i in [1, 5, 10]: self.log(f'train_{i}', metrics[i], on_epoch=True, prog_bar=False, logger=True, sync_dist=True) 
         self.train_loss, self.train_query, self.train_ref = [], [], []
         self.train_labels = []
         return avg_loss
     
     def validation_step(self, batch, batch_idx):
-        street, sat = batch['streetview'], batch['satellite']
-        sat = sat.to(device)
-        street = street.to(device)
-
-        street_out, sat_out = self(street, sat)
-        loss = self.mse(street_out, sat_out)
-
-        self.log('val_loss', loss, on_step=True, prog_bar=False, logger=True, sync_dist=True, batch_size=street.shape[0])
-        self.val_loss.append(loss)
-        self.val_query.append([x.cpu().detach().numpy() for x in street_out])
-        self.val_ref.append([x.cpu().detach().numpy() for x in sat_out])
-        self.val_labels.append(batch['label'])
-        return loss
+        
+        batch_keys = batch.keys()
+        branch = 'streetview' if 'streetview' in batch_keys else 'satellite'
+        image = batch[branch]
+        image = image.to(device)
+        x_out = self.forward(image=image, branch=branch, stage='val')
+        x_out = x_out.cpu().detach()
+        
+        label = batch['name']
+        
+        # Cannot log val loss anymore
+        # loss = self.mse(street_out, sat_out)
+        # self.log('val_loss', loss, on_step=True, prog_bar=False, logger=True, sync_dist=True, batch_size=street.shape[0])
+        # self.val_loss.append(loss)
+        if branch == 'streetview':
+            self.val_query_features.append(x_out)
+            self.val_query_ids.append(label)
+        else:
+            self.val_ref_features.append(x_out)
+            self.val_ref_ids.append(label)
+        return 0
     
     def on_validation_epoch_end(self):
-        avg_loss = torch.stack([x for x in self.val_loss]).mean()
-        self.log('val_loss_epoch', avg_loss, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
+        # avg_loss = torch.stack([x for x in self.val_loss]).mean()
+        # self.log('val_loss_epoch', avg_loss, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
 
-        val_labels = [item for sublist in self.val_labels for item in sublist]
-        query = np.concatenate(self.val_query, axis=0)
-        ref = np.concatenate(self.val_ref, axis=0)
-        metrics = recall_accuracy(query, ref, val_labels)
-        for i in [1, 5, 10]: self.log(f'val_{i}', metrics[i], on_epoch=True, prog_bar=False, logger=True, sync_dist=True) 
+        # val_labels = [item for sublist in self.val_labels for item in sublist]
+        query_features = torch.cat(self.val_query_features, dim=0)
+        query_ids = torch.cat(self.val_query_ids, dim=0)
+        ref_features = torch.cat(self.val_ref_features, dim=0)
+        ref_ids = torch.cat(self.val_ref_ids, dim=0)
+
+        metrics = evaluate(query_features, query_ids, ref_features, ref_ids)
+
+        for i in [1, 5, 10]: self.log(f'val_{i}', metrics[i-1] * 100.0, on_epoch=True, prog_bar=False, logger=True, sync_dist=True) 
 
         mean_val_1_10 = torch.stack([self.trainer.callback_metrics[f'val_{i}'] for i in [1, 10]]).mean()
         self.log('val_mean', mean_val_1_10, on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
-        self.val_loss, self.val_query, self.val_ref = [], [], []
-        self.val_labels = []
+        
+        # self.val_loss, self.val_query, self.val_ref = [], [], []
+        # self.val_labels = []
+        
+        self.val_query_features = []
+        self.val_query_ids = []
 
-        current_lr = self.trainer.lr_scheduler_configs[0].scheduler.get_last_lr()[0]
-        self.log('current_lr', current_lr, on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
+        self.val_ref_features = []
+        self.val_ref_ids = []
+
+        try: # Validate only cannot get LR so pass it.
+            current_lr = self.trainer.lr_scheduler_configs[0].scheduler.get_last_lr()[0]
+            self.log('current_lr', current_lr, on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
+        except:
+            pass
     
     def test_step(self, batch, batch_idx):
         batch_keys = batch.keys()

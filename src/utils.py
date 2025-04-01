@@ -42,6 +42,26 @@ def recall_accuracy(query, db, labels):
 
     return metrics
 
+# validate diagnal GT by using numpy
+def validatenp(sat_global_descriptor, grd_global_descriptor):
+    dist_array = 2.0 - 2.0 * np.matmul(sat_global_descriptor, grd_global_descriptor.T)
+    
+    top1_percent = 11
+    val_accuracy = np.zeros((top1_percent))
+    for i in range(top1_percent):
+        # val_accuracy[0, i] = validate(dist_array, i)
+        accuracy = 0.0
+        data_amount = 0.0
+        for k in range(dist_array.shape[0]):
+            gt_dist = dist_array[k,k]
+            prediction = np.sum(dist_array[:, k] < gt_dist)
+            if prediction < i:
+                accuracy += 1.0
+            data_amount += 1.0
+        accuracy /= data_amount
+        val_accuracy[i] = accuracy * 100.0
+    return val_accuracy
+
 
 
 def get_backbone(cfg):
