@@ -1,6 +1,6 @@
 /lightning_logs
 /lightning_logs/*
-/results/*
+src/results/*
 /ckpts
 /ckpts/*
 /answer.*
