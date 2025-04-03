@@ -261,7 +261,7 @@ class SSL(pl.LightningModule):
 
     def on_test_epoch_end(self):
         streetview_keys = []
-        with open(f"src/data/query_street_name.txt", "r") as f:
+        with open(self.cfg.data.query_file, "r") as f:
             for line in f.readlines():
                 line = line.strip()
                 streetview_keys.append(line.split('.')[0])

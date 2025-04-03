@@ -121,7 +121,7 @@ class University1652_CVGL(Dataset):
         elif stage == 'test':
             counter = 0
 
-            with open(f"{self.cfg.data.root}/test/query_street_name.txt", "r") as f:
+            with open(self.cfg.data.query_file, "r") as f:
                 for line in f.readlines():
                     line = line.strip()
                     id = self.root / 'workshop_query_street' / line
