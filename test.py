@@ -93,7 +93,7 @@ if __name__ == '__main__':
     cfg.merge_from_file(f'{model_dir}/config.yaml')
 
     # model = SSL(cfg)
-    model = SSL.load_from_checkpoint(os.path.join(model_dir, 'ckpts/epoch=19-val_mean=8.36.ckpt'), cfg=cfg)
+    model = SSL.load_from_checkpoint(os.path.join(model_dir, 'ckpts/epoch=25-val_mean=8.57.ckpt'), cfg=cfg)
     model = model.cuda()
     model.eval()
 

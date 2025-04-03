@@ -18,7 +18,7 @@ model:
   backbone: 'convnext'
   size: 'base'
   image_size: 224
-  epochs: 20
+  epochs: 30
   lr: 1e-4
   miner: False
 

@@ -14,7 +14,7 @@ import zipfile
 from dotmap import DotMap
 from copy import deepcopy
 from src.data.u1652 import University1652_CVGL
-from src.utils import recall_accuracy, get_backbone
+from src.utils import recall_accuracy, get_backbone, CMCmAPMetric
 from src.eval import evaluate
 from src.data.database import ImageDatabase
 
@@ -117,6 +117,8 @@ class SSL(pl.LightningModule):
         self.train_loss, self.val_loss, self.test_loss = [], [], []
         self.train_query, self.train_ref = [], []
         
+        self.eval_metrics = CMCmAPMetric()
+        
         
         self.val_query_features, self.val_ref_features = [], []
         self.val_query_ids, self.val_ref_ids = [], []
@@ -188,6 +190,9 @@ class SSL(pl.LightningModule):
         query = np.concatenate(self.train_query, axis=0)
         ref = np.concatenate(self.train_ref, axis=0)
 
+        # Under DDP, this value is not trustworthy, since accuracy is computed
+        # only on each thread, not globally. We can fix that by implementing a 
+        # custom metric class from TorchMetrics.
         metrics = recall_accuracy(query, ref, train_labels)
 
         for i in [1, 5, 10]: self.log(f'train_{i}', metrics[i], on_epoch=True, prog_bar=False, logger=True, sync_dist=True) 
@@ -210,12 +215,16 @@ class SSL(pl.LightningModule):
         # loss = self.mse(street_out, sat_out)
         # self.log('val_loss', loss, on_step=True, prog_bar=False, logger=True, sync_dist=True, batch_size=street.shape[0])
         # self.val_loss.append(loss)
-        if branch == 'streetview':
-            self.val_query_features.append(x_out)
-            self.val_query_ids.append(label)
-        else:
-            self.val_ref_features.append(x_out)
-            self.val_ref_ids.append(label)
+        
+        # if branch == 'streetview':
+        #     self.val_query_features.append(x_out)
+        #     self.val_query_ids.append(label)
+        # else:
+        #     self.val_ref_features.append(x_out)
+        #     self.val_ref_ids.append(label)
+        
+        self.eval_metrics.update(x_out, label, branch)
+        
         return 0
     
     def on_validation_epoch_end(self):
@@ -223,26 +232,33 @@ class SSL(pl.LightningModule):
         # self.log('val_loss_epoch', avg_loss, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
 
         # val_labels = [item for sublist in self.val_labels for item in sublist]
-        query_features = torch.cat(self.val_query_features, dim=0)
-        query_ids = torch.cat(self.val_query_ids, dim=0)
-        ref_features = torch.cat(self.val_ref_features, dim=0)
-        ref_ids = torch.cat(self.val_ref_ids, dim=0)
+        # query_features = torch.cat(self.val_query_features, dim=0)
+        # query_ids = torch.cat(self.val_query_ids, dim=0)
+        # ref_features = torch.cat(self.val_ref_features, dim=0)
+        # ref_ids = torch.cat(self.val_ref_ids, dim=0)
+        
+        metrics = self.eval_metrics.compute()
 
-        metrics = evaluate(query_features, query_ids, ref_features, ref_ids)
+        # metrics = evaluate(query_features, query_ids, ref_features, ref_ids)
 
         for i in [1, 5, 10]: self.log(f'val_{i}', metrics[i-1] * 100.0, on_epoch=True, prog_bar=False, logger=True, sync_dist=True) 
 
+        # TODO: What about using R@1 only?
         mean_val_1_10 = torch.stack([self.trainer.callback_metrics[f'val_{i}'] for i in [1, 10]]).mean()
+        
         self.log('val_mean', mean_val_1_10, on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
+        
+        
+        self.eval_metrics.reset()
         
         # self.val_loss, self.val_query, self.val_ref = [], [], []
         # self.val_labels = []
         
-        self.val_query_features = []
-        self.val_query_ids = []
+        # self.val_query_features = []
+        # self.val_query_ids = []
 
-        self.val_ref_features = []
-        self.val_ref_ids = []
+        # self.val_ref_features = []
+        # self.val_ref_ids = []
 
         try: # Validate only cannot get LR so pass it.
             current_lr = self.trainer.lr_scheduler_configs[0].scheduler.get_last_lr()[0]
