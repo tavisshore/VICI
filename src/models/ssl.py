@@ -103,14 +103,18 @@ class SSL(pl.LightningModule):
         self.model = FeatureExtractor(cfg)
         self.model.to(device)
 
-        if cfg.model.miner:
-            self.MSM = MultiSimilarityMiner(epsilon=0.1)
-            self.HDC = HDCMiner(filter_percentage=0.25)
-            self.loss_func = losses.ContrastiveLoss()
-        else:
-            # This is equivalent to previous InfoNCE with exhaustive batch but simpler
-            base_loss = losses.NTXentLoss(temperature=0.1)
-            self.loss_func = losses.SelfSupervisedLoss(base_loss)
+        # if cfg.model.miner:
+        #     self.MSM = MultiSimilarityMiner(epsilon=0.1)
+        #     self.HDC = HDCMiner(filter_percentage=0.25)
+        #     self.loss_func = losses.ContrastiveLoss()
+        # else:
+        #     # This is equivalent to previous InfoNCE with exhaustive batch but simpler
+        #     base_loss = losses.NTXentLoss(temperature=0.1)
+        #     self.loss_func = losses.SelfSupervisedLoss(base_loss)
+            
+        # This is equivalent to previous InfoNCE with exhaustive batch but simpler
+        base_loss = losses.NTXentLoss(temperature=0.1)
+        self.loss_func = losses.SelfSupervisedLoss(base_loss)
 
         self.mse = nn.MSELoss()
         
@@ -162,24 +166,36 @@ class SSL(pl.LightningModule):
         sat = sat.to(device)
         street = street.to(device)
         street_out, sat_out = self(street, sat)
-        N = street.shape[0]
+        
+        
+        # N = street.shape[0]
 
-        if self.cfg.model.miner:
-            embs = torch.cat((street_out.float(), sat_out.float()), dim=0)
-            labs = torch.cat((torch.arange(N), torch.arange(N)), dim=0)
-            hard_pairs = self.MSM(embs, labs)
-            self.HDC.set_idx_externally(hard_pairs, labs)
-            very_hard_pairs = self.HDC(embs, labs)
+        # if self.cfg.model.miner:
+        #     embs = torch.cat((street_out.float(), sat_out.float()), dim=0)
+        #     labs = torch.cat((torch.arange(N), torch.arange(N)), dim=0)
+        #     hard_pairs = self.MSM(embs, labs)
+        #     self.HDC.set_idx_externally(hard_pairs, labs)
+        #     very_hard_pairs = self.HDC(embs, labs)
 
-            loss = self.loss_func(embs, labs, indices_tuple=very_hard_pairs)
-        else:
-            loss = self.loss_func(sat_out, street_out)
+        #     loss = self.loss_func(embs, labs, indices_tuple=very_hard_pairs)
+        # else:
+        #     loss = self.loss_func(sat_out, street_out)
+        
+        # For gathering output on all GPUs
+        all_street_outputs = self.all_gather(street_out, sync_grads=True)
+        all_sat_outputs = self.all_gather(sat_out, sync_grads=True)
+        # Combining world size dim and batch dim
+        all_street_outputs = all_street_outputs.view(-1, street_out.shape[1])
+        all_sat_outputs = all_sat_outputs.view(-1, sat_out.shape[1])
+        
+        loss = self.loss_func(all_sat_outputs, all_street_outputs)
 
         self.log('train_loss', loss, on_step=True, prog_bar=True, logger=True, sync_dist=True, batch_size=street.shape[0])
         self.train_loss.append(loss) 
         self.train_query.append([x.cpu().detach().numpy() for x in street_out])
         self.train_ref.append([x.cpu().detach().numpy() for x in sat_out])
         self.train_labels.append(id_labels)
+        
         return loss
     
     def on_train_epoch_end(self):
@@ -207,7 +223,9 @@ class SSL(pl.LightningModule):
         image = batch[branch]
         image = image.to(device)
         x_out = self.forward(image=image, branch=branch, stage='val')
-        x_out = x_out.cpu().detach()
+        
+        # x_out = x_out.cpu().detach()
+        x_out = x_out.detach()
         
         label = batch['name']
         
@@ -294,8 +312,6 @@ class SSL(pl.LightningModule):
         # Calculate cosine similarity between streetview and satellite embeddings
         similarity = np.dot(streetview, satellite.T)
         similarity = np.argsort(similarity, axis=1)
-
-        # print(streetview_keys)
 
         # Save top-10 retrievals to file
         answer_file = f'{self.cfg.system.results_path}/answer.txt'
