@@ -1,9 +1,9 @@
 exp_name: 'hpc_4xGPU'
 
 system:
-  gpus: 1
-  workers: 2
-  batch_size: 32
+  gpus: 4
+  workers: 0
+  batch_size: 24
   path: '/work1/wshah/xzhang/challenge'
   results_path: '/work1/wshah/xzhang/challenge/src/results/'
   amd_cluster: True
@@ -15,10 +15,10 @@ data:
 
 model:
   shared_extractor: False
-  backbone: 'convnext'
+  backbone: 'vit'
   size: 'base'
-  image_size: 224
-  epochs: 30
+  image_size: 384
+  epochs: 50
   lr: 1e-4
   miner: False
 

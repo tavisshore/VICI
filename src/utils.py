@@ -62,17 +62,11 @@ class CMCmAPMetric(Metric):
             raise NotImplementedError(f'{branch} is not implemented')
     
     def compute(self):
-        # query_features = torch.cat(self.query_features, dim=0)  # [Nq, D]
-        # query_ids = torch.cat(self.query_ids, dim=0)  # [Nq]
-        # gallery_features = torch.cat(self.gallery_features, dim=0)  # [Ng, D]
-        # gallery_ids = torch.cat(self.gallery_ids, dim=0)  # [Ng]
         
         query_features = dim_zero_cat(self.query_features)  # [Nq, D]
         query_ids = dim_zero_cat(self.query_ids)  # [Nq]
         gallery_features = dim_zero_cat(self.gallery_features)  # [Ng, D]
         gallery_ids = dim_zero_cat(self.gallery_ids)  # [Ng]
-        
-        
 
         cmc = torch.zeros(len(gallery_ids), dtype=torch.float, device=query_features.device)
         ap = 0.0
@@ -104,90 +98,6 @@ class CMCmAPMetric(Metric):
 
         # print(' - '.join(results))
         return cmc
-
-# def compute_mAP(index, good_index, junk_index):
-#     ap = 0.0
-#     cmc = torch.zeros(len(index), dtype=torch.int)
-    
-#     if good_index.size == 0:  # if empty
-#         cmc[0] = -1
-#         return ap, cmc
-
-#     # Remove junk index
-#     mask = np.in1d(index, junk_index, invert=True)
-#     index = index[mask]
-
-#     # Find good index positions
-#     ngood = len(good_index)
-#     mask = np.in1d(index, good_index)
-#     rows_good = np.argwhere(mask == True).flatten()
-    
-#     cmc[rows_good[0]:] = 1  # CMC calculation
-#     for i in range(ngood):
-#         d_recall = 1.0 / ngood
-#         precision = (i + 1) / (rows_good[i] + 1)
-#         old_precision = i / rows_good[i] if rows_good[i] != 0 else 1.0
-#         ap += d_recall * (old_precision + precision) / 2
-
-#     return ap, cmc
-
-# class CMCmAPMetric(Metric):
-#     def __init__(self, ranks=[1, 5, 10], **kwargs):
-#         super().__init__(**kwargs)
-#         self.ranks = ranks
-#         self.add_state("query_features", default=[], dist_reduce_fx=None)
-#         self.add_state("query_ids", default=[], dist_reduce_fx=None)
-#         self.add_state("gallery_features", default=[], dist_reduce_fx=None)
-#         self.add_state("gallery_ids", default=[], dist_reduce_fx=None)
-    
-#     def update(self, feature: Tensor, id: int, branch: str):
-#         if branch == "satellite":
-#             self.gallery_features.append(feature)
-#             self.gallery_ids.append(id)
-#         elif branch == "streetview":
-#             self.query_features.append(feature)
-#             self.query_ids.append(id)
-#         else:
-#             raise NotImplementedError(f'{branch} is not implemented')
-            
-#     def compute(self):
-#         query_features = torch.cat(self.query_features, dim=0)
-#         query_ids = torch.cat(self.query_ids, dim=0).cpu().numpy()
-#         gallery_features = torch.cat(self.gallery_features, dim=0)
-#         gallery_ids = torch.cat(self.gallery_ids, dim=0).cpu().numpy()
-        
-#         cmc = torch.zeros(len(gallery_ids), dtype=torch.float)
-#         ap = 0.0
-#         count = 0
-        
-#         for i in range(len(query_ids)):
-#             score = gallery_features @ query_features[i].unsqueeze(-1)
-#             score = score.squeeze().cpu().numpy()
-#             index = np.argsort(score)[::-1]  # Sort descending
-            
-#             good_index = np.argwhere(gallery_ids == query_ids[i])
-#             junk_index = np.argwhere(gallery_ids == -1)
-            
-#             ap_i, cmc_i = compute_mAP(index, good_index, junk_index)
-#             if cmc_i[0] == -1:
-#                 continue
-            
-#             cmc += cmc_i.float()
-#             ap += ap_i
-#             count += 1
-        
-#         cmc /= count
-#         ap = (ap / count) * 100
-        
-#         string = []
-             
-#         for i in self.ranks:
-#             string.append('Recall@{}: {:.4f}'.format(i, cmc[i-1]*100))
-#         string.append('AP: {:.4f}'.format(ap))             
-            
-#         print(' - '.join(string))
-        
-#         return cmc
 
 
 @rank_zero_only
