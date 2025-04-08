@@ -15,7 +15,6 @@ from dotmap import DotMap
 from copy import deepcopy
 from src.data.u1652 import University1652_CVGL
 from src.utils import recall_accuracy, get_backbone, CMCmAPMetric
-from src.eval import evaluate
 from src.data.database import ImageDatabase
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -64,9 +63,6 @@ class FeatureExtractor(pl.LightningModule):
         super().__init__()
         self.cfg = cfg
 
-        # self.street_conv = get_backbone(cfg)
-        # self.sat_conv = get_backbone(cfg)
-
         self.street_conv = get_backbone(cfg)
         if not cfg.model.shared_extractor:
             self.sat_conv = deepcopy(self.street_conv)
@@ -102,23 +98,15 @@ class SSL(pl.LightningModule):
         
         self.model = FeatureExtractor(cfg)
         self.model.to(device)
-
-        if cfg.model.miner:
-            self.MSM = MultiSimilarityMiner(epsilon=0.1)
-            self.HDC = HDCMiner(filter_percentage=0.25)
-            self.loss_func = losses.ContrastiveLoss()
-        else:
-            # This is equivalent to previous InfoNCE with exhaustive batch but simpler
-            base_loss = losses.NTXentLoss(temperature=0.1)
-            self.loss_func = losses.SelfSupervisedLoss(base_loss)
-
-        self.mse = nn.MSELoss()
+            
+        # This is equivalent to previous InfoNCE with exhaustive batch but simpler
+        base_loss = losses.NTXentLoss(temperature=0.1)
+        self.loss_func = losses.SelfSupervisedLoss(base_loss)
         
         self.train_loss, self.val_loss, self.test_loss = [], [], []
         self.train_query, self.train_ref = [], []
         
         self.eval_metrics = CMCmAPMetric()
-        
         
         self.val_query_features, self.val_ref_features = [], []
         self.val_query_ids, self.val_ref_ids = [], []
@@ -162,24 +150,22 @@ class SSL(pl.LightningModule):
         sat = sat.to(device)
         street = street.to(device)
         street_out, sat_out = self(street, sat)
-        N = street.shape[0]
-
-        if self.cfg.model.miner:
-            embs = torch.cat((street_out.float(), sat_out.float()), dim=0)
-            labs = torch.cat((torch.arange(N), torch.arange(N)), dim=0)
-            hard_pairs = self.MSM(embs, labs)
-            self.HDC.set_idx_externally(hard_pairs, labs)
-            very_hard_pairs = self.HDC(embs, labs)
-
-            loss = self.loss_func(embs, labs, indices_tuple=very_hard_pairs)
-        else:
-            loss = self.loss_func(sat_out, street_out)
+        
+        # For gathering output on all GPUs
+        all_street_outputs = self.all_gather(street_out, sync_grads=True)
+        all_sat_outputs = self.all_gather(sat_out, sync_grads=True)
+        # Combining world size dim and batch dim
+        all_street_outputs = all_street_outputs.view(-1, street_out.shape[1])
+        all_sat_outputs = all_sat_outputs.view(-1, sat_out.shape[1])
+        
+        loss = self.loss_func(all_sat_outputs, all_street_outputs)
 
         self.log('train_loss', loss, on_step=True, prog_bar=True, logger=True, sync_dist=True, batch_size=street.shape[0])
         self.train_loss.append(loss) 
         self.train_query.append([x.cpu().detach().numpy() for x in street_out])
         self.train_ref.append([x.cpu().detach().numpy() for x in sat_out])
         self.train_labels.append(id_labels)
+        
         return loss
     
     def on_train_epoch_end(self):
@@ -207,39 +193,20 @@ class SSL(pl.LightningModule):
         image = batch[branch]
         image = image.to(device)
         x_out = self.forward(image=image, branch=branch, stage='val')
-        x_out = x_out.cpu().detach()
+        
+        # x_out = x_out.cpu().detach()
+        x_out = x_out.detach()
         
         label = batch['name']
         
-        # Cannot log val loss anymore
-        # loss = self.mse(street_out, sat_out)
-        # self.log('val_loss', loss, on_step=True, prog_bar=False, logger=True, sync_dist=True, batch_size=street.shape[0])
-        # self.val_loss.append(loss)
-        
-        # if branch == 'streetview':
-        #     self.val_query_features.append(x_out)
-        #     self.val_query_ids.append(label)
-        # else:
-        #     self.val_ref_features.append(x_out)
-        #     self.val_ref_ids.append(label)
-        
         self.eval_metrics.update(x_out, label, branch)
         
+        # I cannot log the mse error now since the val is not one on one. So return 0 for place holder.
         return 0
     
     def on_validation_epoch_end(self):
-        # avg_loss = torch.stack([x for x in self.val_loss]).mean()
-        # self.log('val_loss_epoch', avg_loss, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
-
-        # val_labels = [item for sublist in self.val_labels for item in sublist]
-        # query_features = torch.cat(self.val_query_features, dim=0)
-        # query_ids = torch.cat(self.val_query_ids, dim=0)
-        # ref_features = torch.cat(self.val_ref_features, dim=0)
-        # ref_ids = torch.cat(self.val_ref_ids, dim=0)
         
         metrics = self.eval_metrics.compute()
-
-        # metrics = evaluate(query_features, query_ids, ref_features, ref_ids)
 
         for i in [1, 5, 10]: self.log(f'val_{i}', metrics[i-1] * 100.0, on_epoch=True, prog_bar=False, logger=True, sync_dist=True) 
 
@@ -248,17 +215,7 @@ class SSL(pl.LightningModule):
         
         self.log('val_mean', mean_val_1_10, on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
         
-        
         self.eval_metrics.reset()
-        
-        # self.val_loss, self.val_query, self.val_ref = [], [], []
-        # self.val_labels = []
-        
-        # self.val_query_features = []
-        # self.val_query_ids = []
-
-        # self.val_ref_features = []
-        # self.val_ref_ids = []
 
         try: # Validate only cannot get LR so pass it.
             current_lr = self.trainer.lr_scheduler_configs[0].scheduler.get_last_lr()[0]
@@ -281,8 +238,6 @@ class SSL(pl.LightningModule):
             for line in f.readlines():
                 line = line.strip()
                 streetview_keys.append(line.split('.')[0])
-        # Get top-10 retrievals for each streetview image and save names to file
-        # streetview_keys = list(self.test_outputs['streetview'].keys())
         satellite_keys = list(self.test_outputs['satellite'].keys())
         streetview_embeddings = [self.test_outputs['streetview'][x] for x in streetview_keys]
         satellite_embeddings = [self.test_outputs['satellite'][x] for x in satellite_keys]
@@ -294,8 +249,6 @@ class SSL(pl.LightningModule):
         # Calculate cosine similarity between streetview and satellite embeddings
         similarity = np.dot(streetview, satellite.T)
         similarity = np.argsort(similarity, axis=1)
-
-        # print(streetview_keys)
 
         # Save top-10 retrievals to file
         answer_file = f'{self.cfg.system.results_path}/answer.txt'
