@@ -18,7 +18,7 @@ _C.system.tune = CN()
 _C.system.tune.lr = False
 _C.system.tune.batch_size = False
 _C.system.results_path = _C.system.path + '/results/'
-_C.system.scheduler = 'plateau' # 'step' or 'plateau' or 'cos'
+_C.system.scheduler = 'cos' # 'step' or 'plateau' or 'cos'
 _C.system.batch_size = 8
 
 # This is a dumb paramerter. 
@@ -27,15 +27,15 @@ _C.system.amd_cluster = True
 
 
 _C.data = CN()
-_C.data.root = f'/scratch/datasets/University/lmdb/'
+_C.data.root = f'/scratch/datasets/University/'
 _C.data.query_file = "src/data/query_street_name.txt"
-_C.data.type = 'lmdb' # 'lmdb', 'folder', 'ffcv
+_C.data.type = 'lmdb' # 'lmdb', 'folder', #'ffcv
 _C.data.sample_equal = True
 
 
 
 _C.model = CN()
-_C.model.epochs = 200
+_C.model.epochs = 10
 _C.model.lr = 1e-4
 
 _C.model.backbone = 'convnext' # 'convnext', 'dinov2

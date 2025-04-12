@@ -10,6 +10,7 @@ from src.utils import results_dir
 
 
 pl.seed_everything(42)
+# torch.set_float32_matmul_precision('high')
 
 args = argparse.ArgumentParser()
 args.add_argument('--debug', action='store_true')
@@ -53,7 +54,7 @@ trainer = pl.Trainer(max_epochs=cfg.model.epochs, devices=cfg.system.gpus,
                      logger=wandb_logger if not cfg.debug else None,
                      callbacks=[checkpoint_callback],
                      check_val_every_n_epoch=2,
-                     overfit_batches=4 if cfg.debug else 0,
+                     overfit_batches=10 if cfg.debug else 0,
                      num_sanity_val_steps=0,
                      strategy='auto',
                      default_root_dir=cfg.system.results_path,

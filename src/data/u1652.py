@@ -56,7 +56,6 @@ class University1652_CVGL(Dataset):
                                                     #  scale=(0.8, 1.0),
                                                     # TODO: Add augmentations
         )
-        import shutil
 
         self.image_pairs = DotMap()
         sat_counter, street_counter = 0, 0

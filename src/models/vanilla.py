@@ -13,7 +13,7 @@ from torch.nn import functional as F
 import zipfile
 from dotmap import DotMap
 from copy import deepcopy
-from src.data.uni import University1652_CVGL
+from src.data.uni import University1652_LMDB
 from src.utils import recall_accuracy, get_backbone, CMCmAPMetric
 from src.data.database import ImageDatabase
 
@@ -93,8 +93,6 @@ class Vanilla(pl.LightningModule):
         self.cfg = cfg
         self.lr = cfg.model.lr
         self.batch_size = cfg.system.batch_size
-
-        self.lmdb_dataset = ImageDatabase(path=cfg.data.root) if cfg.data.type == 'lmdb' else None
         
         self.model = FeatureExtractor(cfg)
         self.model.to(device)
@@ -115,19 +113,19 @@ class Vanilla(pl.LightningModule):
         self.test_outputs = DotMap(streetview=DotMap(), satellite=DotMap())
 
     def train_dataloader(self):
-        train_dataset = University1652_CVGL(self.cfg, stage='train', data_config=self.model.data_config)
+        train_dataset = University1652_LMDB(self.cfg, stage='train', data_config=self.model.data_config)
         return DataLoader(train_dataset, batch_size=self.cfg.system.batch_size, num_workers=self.cfg.system.workers, shuffle=True)
 
     def val_dataloader(self):
-        val_dataset = University1652_CVGL(self.cfg, stage='val', data_config=self.model.data_config)
+        val_dataset = University1652_LMDB(self.cfg, stage='val', data_config=self.model.data_config)
         return DataLoader(val_dataset, batch_size=1, num_workers=self.cfg.system.workers, shuffle=False)
     
     def test_dataloader(self):
-        self.test_dataset = University1652_CVGL(self.cfg, stage='test', data_config=self.model.data_config)
+        self.test_dataset = University1652_LMDB(self.cfg, stage='test', data_config=self.model.data_config)
         return DataLoader(self.test_dataset, batch_size=1, num_workers=self.cfg.system.workers, shuffle=False)
     
     def forward(self, street: torch.Tensor = None, sat: torch.Tensor = None, image: torch.Tensor = None, branch: str = 'streetview', stage: str = 'train'):
-        if stage == 'test' or stage == 'val':
+        if stage != 'train':
             if branch == 'streetview' or self.cfg.model.shared_extractor:
                 x = self.model.embed_street(image)
             else:
@@ -187,16 +185,14 @@ class Vanilla(pl.LightningModule):
         return avg_loss
     
     def validation_step(self, batch, batch_idx):
-        
-        batch_keys = batch.keys()
-        branch = 'streetview' if 'streetview' in batch_keys else 'satellite'
+
+        branch = 'streetview' if 'streetview' in batch.keys() else 'satellite'
         image = batch[branch]
         image = image.to(device)
         x_out = self.forward(image=image, branch=branch, stage='val')
         x_out = x_out.detach()
         
-        label = batch['name']
-        self.eval_metrics.update(x_out, label, branch)
+        self.eval_metrics.update(x_out, batch['id'], branch)
         
         # I cannot log the mse error now since the val is not one on one. So return 0 for place holder.
         return 0
