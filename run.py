@@ -46,8 +46,8 @@ else:
 
 checkpoint_callback = ModelCheckpoint(monitor="val_mean", mode="max", dirpath=f'{cfg.system.results_path}/ckpts/', save_top_k=1, filename='{epoch}-{val_mean:.2f}')
 
-# model = Vanilla(cfg)
-model = SSL(cfg)
+model = Vanilla(cfg)
+# model = SSL(cfg)
 
 trainer = pl.Trainer(max_epochs=cfg.model.epochs, devices=cfg.system.gpus, 
                      logger=wandb_logger if not cfg.debug else None,

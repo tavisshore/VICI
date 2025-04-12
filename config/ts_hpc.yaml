@@ -1,0 +1,23 @@
+exp_name: 'ts_local'
+
+system:
+  gpus: 1
+  workers: 0
+  batch_size: 4
+  scheduler: 'cos'
+
+data:
+  root: '/scratch/datasets/University/lmdb/'
+  query_file: "src/data/query_street_name.txt"
+
+model:
+  shared_extractor: False
+  backbone: 'dinov2'
+  size: 'base'
+  image_size: 518
+  epochs: 100
+  lr: 1e-4
+  miner: False
+
+
+

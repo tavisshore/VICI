@@ -5,9 +5,10 @@ system:
   batch_size: 8
 
 model:
+  shared_extractor: False
   backbone: 'convnext'
   size: 'tiny'
   image_size: 224
-
-
-
+  epochs: 50
+  lr: 1e-4
+  miner: False

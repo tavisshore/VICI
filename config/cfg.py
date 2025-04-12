@@ -27,9 +27,9 @@ _C.system.amd_cluster = True
 
 
 _C.data = CN()
-_C.data.root = f'/home/{getpass.getuser()}/datasets/challenge/lmdb/'
+_C.data.root = f'/scratch/datasets/University/lmdb/'
 _C.data.query_file = "src/data/query_street_name.txt"
-_C.data.type = 'lmdb' # 'lmdb', 'folder'
+_C.data.type = 'lmdb' # 'lmdb', 'folder', 'ffcv
 _C.data.sample_equal = True
 
 
