@@ -5,19 +5,22 @@ system:
   workers: 0
   batch_size: 4
   scheduler: 'cos'
+  path: '/vol/research/deep_localisation/challenge/'
+  results_path: '/vol/research/deep_localisation/challenge/results/'
+  tune:
+    batch_size: True
 
 data:
-  root: '/scratch/datasets/University/lmdb/'
+  root: '/scratch/datasets/University/'
   query_file: "src/data/query_street_name.txt"
 
 model:
   shared_extractor: False
-  backbone: 'dinov2'
-  size: 'base'
-  image_size: 518
-  epochs: 100
+  backbone: 'convnext'
+  size: 'tiny'
+  image_size: 384
+  epochs: 10
   lr: 1e-4
-  miner: False
 
 
 

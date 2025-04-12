@@ -11,4 +11,4 @@
 #SBATCH --error=slurm.%N.%j.err             #Error file for stderr (optional)
 
 # If using an apptainer image
-apptainer exec oras://container-registry.surrey.ac.uk/shared-containers/uavm:latest  python run.py --config ts_hpc.yaml --debug
+apptainer exec oras://container-registry.surrey.ac.uk/shared-containers/uavm:latest python run.py --config ts_hpc.yaml --debug

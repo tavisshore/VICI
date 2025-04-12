@@ -23,7 +23,7 @@ _C.system.batch_size = 8
 
 # This is a dumb paramerter. 
 # But I need to disable wandb logger in this cluser to avoid freezing
-_C.system.amd_cluster = True
+_C.system.amd_cluster = False
 
 
 _C.data = CN()

@@ -55,8 +55,7 @@ class University1652_RAW(Dataset):
 
         self.transform = timm.data.create_transform(**data_config, 
                                                     is_training=True if stage == 'train' else False,
-                                                    #  train_crop_mode='random',
-                                                    #  scale=(0.8, 1.0),
+                                                     scale=(0.8, 1.0),
                                                     # TODO: Add augmentations
         )
 
