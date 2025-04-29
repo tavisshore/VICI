@@ -7,7 +7,7 @@ import lightning.pytorch as pl
 import timm 
 from pytorch_metric_learning import losses
 from pytorch_metric_learning.miners import MultiSimilarityMiner, HDCMiner
-from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR, CosineAnnealingLR
+from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR, CosineAnnealingLR, ExponentialLR
 
 from torch.nn import functional as F
 import zipfile
@@ -210,8 +210,8 @@ class SSL(pl.LightningModule):
 
         for i in [1, 5, 10]: self.log(f'val_{i}', metrics[i-1] * 100.0, on_epoch=True, prog_bar=False, logger=True, sync_dist=True) 
 
-        # TODO: What about using R@1 only?
-        mean_val_1_10 = torch.stack([self.trainer.callback_metrics[f'val_{i}'] for i in [1, 10]]).mean()
+        # mean_val_1_10 = torch.stack([self.trainer.callback_metrics[f'val_{i}'] for i in [1, 10]]).mean()
+        mean_val_1_10 = self.trainer.callback_metrics['val_1']
         
         self.log('val_mean', mean_val_1_10, on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
         
@@ -279,6 +279,9 @@ class SSL(pl.LightningModule):
             return [opt], [{"scheduler": sch, "interval": "epoch"}]
         elif self.cfg.system.scheduler == 'cos':
             sch = CosineAnnealingLR(optimizer=opt, T_max=self.cfg.model.epochs)
+            return [opt], [{"scheduler": sch, "interval": "epoch"}]
+        elif self.cfg.system.scheduler == 'exp':
+            sch = ExponentialLR(optimizer=opt, gamma = 0.99)
             return [opt], [{"scheduler": sch, "interval": "epoch"}]
         else:
             return opt

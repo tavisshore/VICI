@@ -49,6 +49,12 @@ class University1652_CVGL(Dataset):
         self.cfg = cfg
         self.stage = stage
         self.root = Path(self.cfg.data.root) / stage if stage != 'val' else Path(self.cfg.data.root) / 'test'
+        
+        # if stage == "train":
+        #     data_config['re_prob'] = 0.2
+        #     data_config['grayscale_prob'] = 0.2
+        #     data_config['gaussian_blur_prob'] = 0.2
+            
 
         self.transform = timm.data.create_transform(**data_config, 
                                                     is_training=True if stage == 'train' else False,
@@ -56,6 +62,11 @@ class University1652_CVGL(Dataset):
                                                     #  scale=(0.8, 1.0),
                                                     # TODO: Add augmentations
         )
+
+        # print("==================================")
+        # print(stage)
+        # print(self.transform)
+        # print("==================================")
 
         self.image_pairs = DotMap()
         sat_counter, street_counter = 0, 0
