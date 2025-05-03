@@ -14,7 +14,6 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 def lmdb_stage_keys(lmdb, stage):
     image_pairs = DotMap()
-
     all_keys = lmdb.keys
 
     if stage == 'train':
@@ -47,6 +46,60 @@ def lmdb_stage_keys(lmdb, stage):
     return image_pairs
 
 
+
+def raw_stage_keys(root, cfg, stage):
+    # NOTE: Quite a lot of repetition here
+
+    image_pairs = DotMap()
+    if stage == 'train':
+        satellite_path = root / 'satellite'
+        sub_dirs = [x.stem for x in satellite_path.iterdir() if x.is_dir()]
+        for id in sub_dirs:
+            streetviews = [x for x in (root / 'street' / id).iterdir() if x.is_file()]
+            satellite = [x for x in (root / 'satellite' / id).iterdir() if x.is_file()][0]
+            image_pairs[satellite.stem] = DotMap(satellite=satellite, streetviews=streetviews)
+
+        return image_pairs, None
+    elif stage == 'val':
+        satellite_path = root / 'gallery_satellite'
+        street_path = root / 'query_street'
+        satellite_ids = [x.stem for x in satellite_path.iterdir() if x.is_dir()]
+        street_ids = [x.stem for x in street_path.iterdir() if x.is_dir()]
+        
+        # querys for each satellite
+        counter = 0
+        for id in satellite_ids:
+            sat_name = satellite_path / id / f'{id}.jpg'
+            if sat_name.is_file():
+                image_pairs[counter] = DotMap(satellite=sat_name, id=id)
+                counter += 1
+                
+        for id in street_ids:
+            street_names = [x for x in (street_path / id).iterdir() if x.is_file()]
+            for s in street_names:
+                image_pairs[counter] = DotMap(streetview=s, id=id)
+                counter += 1
+        
+        return image_pairs, satellite_ids
+
+    elif stage == 'test':
+        counter = 0
+
+        with open(cfg.data.query_file, "r") as f:
+            for line in f.readlines():
+                line = line.strip()
+                id = root / 'workshop_query_street' / line
+                image_pairs[counter] = DotMap(streetview=id, id=id.stem)
+                counter += 1
+
+        for id in (root / 'workshop_gallery_satellite').iterdir():
+            image_pairs[counter] = DotMap(satellite=id, id=id.stem)
+            counter += 1
+
+        return image_pairs, None
+
+
+
 class University1652_RAW(Dataset):
     def __init__(self, cfg, stage: str = 'train', data_config=None):
         self.cfg = cfg
@@ -59,70 +112,8 @@ class University1652_RAW(Dataset):
                                                     # TODO: Add augmentations
         )
 
-        self.image_pairs = DotMap()
-        sat_counter, street_counter = 0, 0
-
-        # NOTE: Quite a lot of repetition here
-        if stage == 'train':
-            self.satellite_path = self.root / 'satellite'
-            self.sub_dirs = [x.stem for x in self.satellite_path.iterdir() if x.is_dir()]
-            
-            # Validation references same as train or not - split before or after - better way?
-            self.pair_keys = []
-            for id in self.sub_dirs:
-                # 1 satellite, varying streetview - add sampling option to not bias
-                streetviews = [x for x in (self.root / 'street' / id).iterdir() if x.is_file()]
-                satellite = [x for x in (self.root / 'satellite' / id).iterdir() if x.is_file()]
-                self.image_pairs[id] = DotMap()
-                sat_counter += 1
-                for i_s, s in enumerate(streetviews):
-                    self.image_pairs[id][i_s] = DotMap(streetview=s, satellite=satellite[0], pair=id, idx=i_s)
-                    street_counter += 1
-
-                # TODO: This dodgy bit of code simplifies sampling - evaluate now.
-                    if not self.cfg.data.sample_equal: # Every possible image pair is a sample
-                        self.pair_keys.append(DotMap(pair=id, index=i_s))
-                if self.cfg.data.sample_equal: # Only one image pair per satellite reference - randomly select streetview at runtime
-                    self.pair_keys.append(DotMap(pair=id, index=list(range(len(streetviews)))))
-        elif stage == 'val':
-            self.satellite_path = self.root / 'gallery_satellite'
-            self.street_path = self.root / 'query_street'
-            self.satellite_ids = [x.stem for x in self.satellite_path.iterdir() if x.is_dir()]
-            self.street_ids = [x.stem for x in self.street_path.iterdir() if x.is_dir()]
-
-            self.pair_keys = []
-            # querys for each satellite
-            counter = 0
-            for id in self.satellite_ids:
-                sat_name = self.satellite_path / id / f'{id}.jpg'
-                if sat_name.is_file():
-                    self.image_pairs[counter] = DotMap(satellite=sat_name, name=id)
-                    counter += 1
-                    
-            for id in self.street_ids:
-                street_names = [x for x in (self.street_path / id).iterdir() if x.is_file()]
-                for s in street_names:
-                    self.image_pairs[counter] = DotMap(streetview=s, name=id)
-                    counter += 1
-
-            self.pair_keys = list(self.image_pairs.keys())
-
-        elif stage == 'test':
-            counter = 0
-
-            with open(self.cfg.data.query_file, "r") as f:
-                for line in f.readlines():
-                    line = line.strip()
-                    id = self.root / 'workshop_query_street' / line
-                    self.image_pairs[counter] = DotMap(streetview=id, name=id.stem)
-                    counter += 1
-                    street_counter += 1
-
-            for id in (self.root / 'workshop_gallery_satellite').iterdir():
-                self.image_pairs[counter] = DotMap(satellite=id, name=id.stem)
-                counter += 1
-                sat_counter += 1
-            self.pair_keys = list(self.image_pairs.keys())
+        self.images, self.satellite_ids = raw_stage_keys(self.root, self.cfg, self.stage)
+        self.pair_keys = list(self.images.keys())
 
     def __len__(self):
         return len(self.pair_keys)
@@ -130,41 +121,41 @@ class University1652_RAW(Dataset):
     def __getitem__(self, idx):
         sample = self.pair_keys[idx]
 
-        if self.stage == 'test':
-            imgs = self.image_pairs[sample]
-            keys = imgs.keys()
-            if 'streetview' in keys:
-                streetview = Image.open(imgs.streetview).convert('RGB')
-                streetview = self.transform(streetview)
-                return {'streetview': streetview, 'name': str(imgs.name)}
-            else:
-                satellite = Image.open(imgs.satellite).convert('RGB')
-                satellite = self.transform(satellite)
-                return {'satellite': satellite, 'name': str(imgs.name)}
-        elif self.stage == 'train':        
+        if self.stage == 'train':        
             if self.cfg.data.sample_equal:
-                sample.index = torch.randint(0, len(self.image_pairs[sample.pair]), (1,)).item()
-            imgs = self.image_pairs[sample.pair][sample.index]
-            streetview = Image.open(imgs.streetview).convert('RGB')
-            satellite = Image.open(imgs.satellite).convert('RGB')
+                index = torch.randint(0, len(self.images[sample].streetviews), (1,)).item()
+            streetview = Image.open(self.images[sample].streetviews[index]).convert('RGB')
+            satellite = Image.open(self.images[sample].satellite).convert('RGB')
             streetview = self.transform(streetview)
             satellite = self.transform(satellite)
-            return {'streetview': streetview, 'satellite': satellite, 'label': sample.pair}
-
-        else:
-            imgs = self.image_pairs[sample]
-            keys = imgs.keys()
-            if 'streetview' in keys:
+            return {'streetview': streetview, 'satellite': satellite, 'id': sample}
+        
+        elif self.stage == 'val':
+            imgs = self.images[sample]
+            if 'streetview' in imgs.keys():
                 streetview = Image.open(imgs.streetview).convert('RGB')
                 streetview = self.transform(streetview)
-                if imgs.name in self.satellite_ids:
-                    return {'streetview': streetview, 'name': int(imgs.name)}
+                if imgs.id in self.satellite_ids:
+                    return {'streetview': streetview, 'id': int(imgs.id)}
                 else: # If no GT, so return -1
-                    return {'streetview': streetview, 'name': -1}
+                    return {'streetview': streetview, 'id': -1}
             else:
                 satellite = Image.open(imgs.satellite).convert('RGB')
                 satellite = self.transform(satellite)
-                return {'satellite': satellite, 'name': int(imgs.name)}
+                return {'satellite': satellite, 'id': int(imgs.id)}
+            
+        elif self.stage == 'test':
+            imgs = self.images[sample]
+            if 'streetview' in imgs.keys():
+                streetview = Image.open(imgs.streetview).convert('RGB')
+                streetview = self.transform(streetview)
+                return {'streetview': streetview, 'id': str(imgs.id)}
+            else:
+                satellite = Image.open(imgs.satellite).convert('RGB')
+                satellite = self.transform(satellite)
+                return {'satellite': satellite, 'id': str(imgs.id)}
+
+
 
 class University1652_LMDB(Dataset):
     def __init__(self, cfg=None, stage: str = 'train', data_config=None):
@@ -242,7 +233,9 @@ if __name__ == '__main__':
     #     data = University1652_RAW(cfg=cfg, stage=stage, data_config=data_config)
     #     print(f'{stage} - {data.__len__()}')
 
-    print(f'LMDB')
-    for stage in ['val']:
-        data = University1652_LMDB(cfg=cfg, stage=stage, data_config=data_config)
-        print(f'stage {stage} - len: {data.__len__()}')
+
+    for stage in ['train', 'val', 'test']:
+        data = University1652_RAW(cfg=cfg, stage=stage, data_config=data_config)
+        # item = data.__getitem__(0)
+        # print(item.keys())
+        print(f'{stage} - {data.__len__()}')

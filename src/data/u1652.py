@@ -82,6 +82,11 @@ class University1652_CVGL(Dataset):
                         self.pair_keys.append(DotMap(pair=id, index=i_s))
                 if self.cfg.data.sample_equal: # Only one image pair per satellite reference - randomly select streetview at runtime
                     self.pair_keys.append(DotMap(pair=id, index=list(range(len(streetviews)))))
+
+            # ADD GOOGLE AND MAYBE DRONE IMAGES TO SET
+            
+
+
         elif stage == 'val':
             self.satellite_path = self.root / 'gallery_satellite'
             self.street_path = self.root / 'query_street'

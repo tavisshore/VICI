@@ -13,7 +13,7 @@ from torch.nn import functional as F
 import zipfile
 from dotmap import DotMap
 from copy import deepcopy
-from src.data.uni import University1652_LMDB
+from src.data.uni import University1652_LMDB, University1652_RAW
 from src.utils import recall_accuracy, get_backbone, CMCmAPMetric
 from src.data.database import ImageDatabase
 
@@ -113,15 +113,24 @@ class Vanilla(pl.LightningModule):
         self.test_outputs = DotMap(streetview=DotMap(), satellite=DotMap())
 
     def train_dataloader(self):
-        train_dataset = University1652_LMDB(self.cfg, stage='train', data_config=self.model.data_config)
-        return DataLoader(train_dataset, batch_size=self.cfg.system.batch_size, num_workers=self.cfg.system.workers, shuffle=True)
+        if self.cfg.data.type == 'lmdb':
+            train_dataset = University1652_LMDB(self.cfg, stage='train', data_config=self.model.data_config)
+        elif self.cfg.data.type == 'folder':
+            train_dataset = University1652_RAW(self.cfg, stage='train', data_config=self.model.data_config)
+        return DataLoader(train_dataset, batch_size=self.batch_size, num_workers=self.cfg.system.workers, shuffle=True)
 
     def val_dataloader(self):
-        val_dataset = University1652_LMDB(self.cfg, stage='val', data_config=self.model.data_config)
+        if self.cfg.data.type == 'lmdb':
+            val_dataset = University1652_LMDB(self.cfg, stage='val', data_config=self.model.data_config)
+        elif self.cfg.data.type == 'folder':
+            val_dataset = University1652_RAW(self.cfg, stage='val', data_config=self.model.data_config)
         return DataLoader(val_dataset, batch_size=1, num_workers=self.cfg.system.workers, shuffle=False)
     
     def test_dataloader(self):
-        self.test_dataset = University1652_LMDB(self.cfg, stage='test', data_config=self.model.data_config)
+        if self.cfg.data.type == 'lmdb':
+            self.test_dataset = University1652_LMDB(self.cfg, stage='test', data_config=self.model.data_config)
+        elif self.cfg.data.type == 'folder':
+            self.test_dataset = University1652_RAW(self.cfg, stage='test', data_config=self.model.data_config)
         return DataLoader(self.test_dataset, batch_size=1, num_workers=self.cfg.system.workers, shuffle=False)
     
     def forward(self, street: torch.Tensor = None, sat: torch.Tensor = None, image: torch.Tensor = None, branch: str = 'streetview', stage: str = 'train'):
@@ -144,7 +153,6 @@ class Vanilla(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         street, sat = batch['streetview'], batch['satellite']
-        id_labels = batch['label']
         sat = sat.to(device)
         street = street.to(device)
         street_out, sat_out = self(street, sat)
@@ -162,7 +170,7 @@ class Vanilla(pl.LightningModule):
         self.train_loss.append(loss) 
         self.train_query.append([x.cpu().detach().numpy() for x in street_out])
         self.train_ref.append([x.cpu().detach().numpy() for x in sat_out])
-        self.train_labels.append(id_labels)
+        self.train_labels.append(batch['id'])
         
         return loss
     
@@ -220,7 +228,7 @@ class Vanilla(pl.LightningModule):
         image = image.to(device)
         x_out = self.forward(image=image, branch=branch, stage='test')
         x_out = x_out.cpu().detach().numpy()
-        self.test_outputs[branch][batch['name'][0]] = x_out
+        self.test_outputs[branch][batch['id'][0]] = x_out
 
     def on_test_epoch_end(self):
         streetview_keys = []

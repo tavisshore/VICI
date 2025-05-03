@@ -18,9 +18,9 @@ data:
 
 model:
   shared_extractor: False
-  backbone: 'dinov2'
-  size: 'base'
-  image_size: 518
+  backbone: 'vit'
+  size: 'huge'
+  image_size: 336
   epochs: 300
   lr: 1e-4
 

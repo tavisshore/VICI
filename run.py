@@ -47,8 +47,8 @@ else:
 
 checkpoint_callback = ModelCheckpoint(monitor="val_mean", mode="max", dirpath=f'{cfg.system.results_path}/ckpts/', save_top_k=1, filename='{epoch}-{val_mean:.2f}')
 
-model = Vanilla(cfg)
-# model = SSL(cfg)
+# model = Vanilla(cfg)
+model = SSL(cfg)
 
 trainer = pl.Trainer(max_epochs=cfg.model.epochs, devices=cfg.system.gpus, 
                      logger=wandb_logger if not cfg.debug else None,
@@ -64,9 +64,11 @@ trainer = pl.Trainer(max_epochs=cfg.model.epochs, devices=cfg.system.gpus,
 
 if cfg.system.gpus == 1 and not cfg.debug:
     tuner = Tuner(trainer)
-    if cfg.system.tune.lr: cfg.model.lr = tuner.lr_find(model)
-    if cfg.system.tune.batch_size: tuner.scale_batch_size(model, mode='power', init_val=cfg.system.batch_size)
-        
+    if cfg.system.tune.lr: 
+        cfg.model.lr = tuner.lr_find(model)
+    if cfg.system.tune.batch_size: 
+        cfg.system.batch_size = tuner.scale_batch_size(model, mode='power', init_val=cfg.system.batch_size)
+
 trainer.fit(model)
 
 ###
@@ -77,3 +79,4 @@ if trainer.local_rank == 0:
     trainer.test(model, ckpt_path=checkpoint_callback.best_model_path)
 else: # Nothing to do in other rank, just put as a barrier here.
     pass
+

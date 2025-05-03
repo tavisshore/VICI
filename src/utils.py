@@ -153,7 +153,7 @@ def get_backbone(cfg):
             }
         },  
         'dinov2': {
-            'tiny': 'timm/vit_small_patch14_reg4_dinov2.lvd142m', # size irrelevant?
+            'tiny': 'timm/vit_small_patch14_reg4_dinov2.lvd142m', 
             'base': 'timm/vit_base_patch14_reg4_dinov2.lvd142m'
         },
         'vit': {
@@ -167,7 +167,11 @@ def get_backbone(cfg):
             'base': {
                 224: 'timm/vit_base_patch16_224.augreg_in21k_ft_in1k',
                 384: 'timm/vit_base_patch16_384.augreg_in21k_ft_in1k'
-            }   
+            },
+            'huge': {
+                224: 'timm/vit_huge_patch14_224.orig_in21k',
+                336: 'timm/vit_huge_patch14_clip_336.laion2b_ft_in12k_in1k'
+            }
         }
     }
 

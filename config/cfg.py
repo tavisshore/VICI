@@ -16,7 +16,7 @@ _C.system.workers = 4
 _C.system.path = str(Path(__file__).parent.parent.resolve())
 _C.system.tune = CN()
 _C.system.tune.lr = False
-_C.system.tune.batch_size = False
+_C.system.tune.batch_size = True
 _C.system.results_path = _C.system.path + '/results/'
 _C.system.scheduler = 'cos' # 'step' or 'plateau' or 'cos'
 _C.system.batch_size = 8
@@ -29,7 +29,7 @@ _C.system.amd_cluster = False
 _C.data = CN()
 _C.data.root = f'/scratch/datasets/University/'
 _C.data.query_file = "src/data/query_street_name.txt"
-_C.data.type = 'lmdb' # 'lmdb', 'folder', #'ffcv
+_C.data.type = 'folder' # 'lmdb', 'folder', #'ffcv
 _C.data.sample_equal = True
 
 
