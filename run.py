@@ -1,4 +1,5 @@
 import argparse
+import torch
 import lightning.pytorch as pl
 from lightning.pytorch import loggers as plg
 from lightning.pytorch.callbacks import ModelCheckpoint
@@ -10,7 +11,8 @@ from src.utils import results_dir
 
 
 pl.seed_everything(42)
-# torch.set_float32_matmul_precision('high')
+if torch.cuda.is_available():
+    torch.set_float32_matmul_precision('high')
 
 args = argparse.ArgumentParser()
 args.add_argument('--debug', action='store_true')
@@ -45,16 +47,16 @@ else:
     cfg.system.gpus = 1
     wandb_logger = None
 
-checkpoint_callback = ModelCheckpoint(monitor="val_mean", mode="max", dirpath=f'{cfg.system.results_path}/ckpts/', save_top_k=1, filename='{epoch}-{val_mean:.2f}')
+checkpoint_callback = ModelCheckpoint(monitor="train_mean", mode="max", dirpath=f'{cfg.system.results_path}/ckpts/', save_top_k=1, filename='{epoch}-{train_mean:.2f}')
 
-# model = Vanilla(cfg)
-model = SSL(cfg)
+model = Vanilla(cfg)
+# model = SSL(cfg)
 
 trainer = pl.Trainer(max_epochs=cfg.model.epochs, devices=cfg.system.gpus, 
                      logger=wandb_logger if not cfg.debug else None,
                      callbacks=[checkpoint_callback],
                      check_val_every_n_epoch=2,
-                     overfit_batches=10 if cfg.debug else 0,
+                     overfit_batches=16 if cfg.debug else 0,
                      num_sanity_val_steps=0,
                      strategy='auto',
                      default_root_dir=cfg.system.results_path,

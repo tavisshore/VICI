@@ -5,21 +5,18 @@ from pathlib import Path
 import torch
 from torch.utils.data import Dataset
 import timm
-from PIL import Image
 from dotmap import DotMap
-# from src.data.database import ImageDatabase
 from database import ImageDatabase
-
-import random 
-
+from PIL import Image
+# from database import ImageDatabase
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
 def lmdb_stage_keys(cfg, lmdb, stage, val_prop=0.01):
     image_pairs = DotMap()
-    all_keys = lmdb.keys
 
     if stage == 'train' or stage == 'val':
+        all_keys = lmdb.keys
         street_keys = [x for x in all_keys if 'street_' in x]
         sat_keys = [x for x in all_keys if 'satellite_' in x]
         drone_keys = [x for x in all_keys if 'drone_' in x]
@@ -47,15 +44,16 @@ def lmdb_stage_keys(cfg, lmdb, stage, val_prop=0.01):
         image_pairs = new_dict
 
     else:
-        sat_keys = [x for x in all_keys if 'satellite_' in x]
-        street_keys = [x for x in all_keys if 'street_' in x]
-
         counter = 0
-        for sat_id in sat_keys:
-            image_pairs[counter] = DotMap(satellite=sat_id)
-            counter += 1
-        for street in street_keys:
-            image_pairs[counter] = DotMap(streetview=street)
+        with open(cfg.data.query_file, "r") as f:
+            for line in f.readlines():
+                line = line.strip()
+                id = Path(cfg.data.root) / 'test/workshop_query_street' / line
+                image_pairs[counter] = DotMap(streetview=id, name=id.stem)
+                counter += 1
+
+        for id in (Path(cfg.data.root) / 'test/workshop_gallery_satellite').iterdir():
+            image_pairs[counter] = DotMap(satellite=id, name=id.stem)
             counter += 1
 
     return image_pairs
@@ -67,14 +65,14 @@ class University1652_LMDB(Dataset):
         self.stage = stage
         self.data_stage = 'train' if stage == 'val' else stage
         
-        # self.transform = timm.data.create_transform(**data_config, 
-        #                                             is_training=True if stage == 'train' else False,
-        #                                             #  train_crop_mode='random',
-        #                                             #  scale=(0.8, 1.0),
-        #                                             # TODO: Add augmentations
-        # )
+        self.transform = timm.data.create_transform(**data_config, 
+                                                    is_training=True if stage == 'train' else False,
+                                                    #  train_crop_mode='random',
+                                                     scale=(0.8, 1.0),
+                                                    # TODO: Add augmentations
+        )
         
-        self.lmdb = ImageDatabase(path=f'{cfg.data.root}/lmdb/{self.data_stage}')
+        self.lmdb = ImageDatabase(path=f'{cfg.data.root}/lmdb/{self.data_stage}') if stage != 'test' else None
         self.images = lmdb_stage_keys(cfg, self.lmdb, stage)
         self.pair_keys = list(self.images.keys())
 
@@ -83,34 +81,26 @@ class University1652_LMDB(Dataset):
     
     def __getitem__(self, idx):
         sat_id = self.pair_keys[idx]
-        # print(f'sat_id: {sat_id}')
+
         if self.stage == 'test':
             img_dict = self.images[sat_id]
-
-            if 'streetview' in img_dict.keys():
-                streetview = self.lmdb[img_dict.streetview].convert('RGB')
-                # streetview = self.transform(streetview)
-                street_name = img_dict.streetview.split('.')[0] # remove .jpg
-                dic = {'streetview': streetview, 'label': street_name, 'type': 'street'}
-                if 'id' in img_dict.keys():
-                    dic['id'] = img_dict['id']
-                return dic
+            keys = img_dict.keys()
+            if 'streetview' in keys:
+                streetview = Image.open(img_dict.streetview).convert('RGB')
+                streetview = self.transform(streetview)
+                return {'streetview': streetview, 'name': str(img_dict.name)}
             else:
-                satellite = self.lmdb[img_dict.satellite].convert('RGB')
-                # satellite = self.transform(satellite)
-                sat_name = img_dict.satellite.split('_')[1]
-                dic = {'satellite': satellite, 'label': sat_name, 'type': 'sat'}
-                if 'id' in img_dict.keys():
-                    dic['id'] = img_dict['id']
-                return dic
+                satellite = Image.open(img_dict.satellite).convert('RGB')
+                satellite = self.transform(satellite)
+                return {'satellite': satellite, 'name': str(img_dict.name)}
         else:        
             non_sat_images = self.images[sat_id]
             index = torch.randint(0, len(non_sat_images), (1,)).item()
             streetview = self.lmdb[non_sat_images[index]].convert('RGB')
             satellite = self.lmdb[sat_id].convert('RGB')
             sat_name = sat_id.split('_')[1]
-            # streetview = self.transform(streetview)
-            # satellite = self.transform(satellite)
+            streetview = self.transform(streetview)
+            satellite = self.transform(satellite)
             return {'streetview': streetview, 'satellite': satellite, 'label': sat_name}
 
             

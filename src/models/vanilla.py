@@ -13,7 +13,7 @@ from torch.nn import functional as F
 import zipfile
 from dotmap import DotMap
 from copy import deepcopy
-from src.data.uni import University1652_LMDB, University1652_RAW
+from src.data.uni import University1652_LMDB
 from src.utils import recall_accuracy, get_backbone, CMCmAPMetric
 from src.data.database import ImageDatabase
 
@@ -113,28 +113,19 @@ class Vanilla(pl.LightningModule):
         self.test_outputs = DotMap(streetview=DotMap(), satellite=DotMap())
 
     def train_dataloader(self):
-        if self.cfg.data.type == 'lmdb':
-            train_dataset = University1652_LMDB(self.cfg, stage='train', data_config=self.model.data_config)
-        elif self.cfg.data.type == 'folder':
-            train_dataset = University1652_RAW(self.cfg, stage='train', data_config=self.model.data_config)
+        train_dataset = University1652_LMDB(self.cfg, stage='train', data_config=self.model.data_config)
         return DataLoader(train_dataset, batch_size=self.batch_size, num_workers=self.cfg.system.workers, shuffle=True)
 
     def val_dataloader(self):
-        if self.cfg.data.type == 'lmdb':
-            val_dataset = University1652_LMDB(self.cfg, stage='val', data_config=self.model.data_config)
-        elif self.cfg.data.type == 'folder':
-            val_dataset = University1652_RAW(self.cfg, stage='val', data_config=self.model.data_config)
+        val_dataset = University1652_LMDB(self.cfg, stage='val', data_config=self.model.data_config)
         return DataLoader(val_dataset, batch_size=1, num_workers=self.cfg.system.workers, shuffle=False)
     
     def test_dataloader(self):
-        if self.cfg.data.type == 'lmdb':
-            self.test_dataset = University1652_LMDB(self.cfg, stage='test', data_config=self.model.data_config)
-        elif self.cfg.data.type == 'folder':
-            self.test_dataset = University1652_RAW(self.cfg, stage='test', data_config=self.model.data_config)
+        self.test_dataset = University1652_LMDB(self.cfg, stage='test', data_config=self.model.data_config)
         return DataLoader(self.test_dataset, batch_size=1, num_workers=self.cfg.system.workers, shuffle=False)
     
     def forward(self, street: torch.Tensor = None, sat: torch.Tensor = None, image: torch.Tensor = None, branch: str = 'streetview', stage: str = 'train'):
-        if stage != 'train':
+        if stage == 'test':
             if branch == 'streetview' or self.cfg.model.shared_extractor:
                 x = self.model.embed_street(image)
             else:
@@ -170,7 +161,7 @@ class Vanilla(pl.LightningModule):
         self.train_loss.append(loss) 
         self.train_query.append([x.cpu().detach().numpy() for x in street_out])
         self.train_ref.append([x.cpu().detach().numpy() for x in sat_out])
-        self.train_labels.append(batch['id'])
+        self.train_labels.append(batch['label'])
         
         return loss
     
@@ -188,19 +179,20 @@ class Vanilla(pl.LightningModule):
         metrics = recall_accuracy(query, ref, train_labels)
 
         for i in [1, 5, 10]: self.log(f'train_{i}', metrics[i], on_epoch=True, prog_bar=False, logger=True, sync_dist=True) 
+        mean_train_1_10 = torch.stack([self.trainer.callback_metrics[f'train_{i}'] for i in [1, 5, 10]]).mean()
+        self.log('train_mean', mean_train_1_10, on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
+
         self.train_loss, self.train_query, self.train_ref = [], [], []
         self.train_labels = []
         return avg_loss
     
     def validation_step(self, batch, batch_idx):
-
-        branch = 'streetview' if 'streetview' in batch.keys() else 'satellite'
-        image = batch[branch]
-        image = image.to(device)
-        x_out = self.forward(image=image, branch=branch, stage='val')
-        x_out = x_out.detach()
+        street_out, sat_out = self.forward(street=batch['streetview'], sat=batch['satellite'], stage='val')
+        street_out = street_out.detach()
+        sat_out = sat_out.detach()
         
-        self.eval_metrics.update(x_out, batch['id'], branch)
+        self.eval_metrics.update(street_out, int(batch['label'][0]), 'streetview')
+        self.eval_metrics.update(sat_out, int(batch['label'][0]), 'satellite')
         
         # I cannot log the mse error now since the val is not one on one. So return 0 for place holder.
         return 0
@@ -208,18 +200,20 @@ class Vanilla(pl.LightningModule):
     def on_validation_epoch_end(self):
         metrics = self.eval_metrics.compute()
 
-        for i in [1, 5, 10]: self.log(f'val_{i}', metrics[i-1] * 100.0, on_epoch=True, prog_bar=False, logger=True, sync_dist=True) 
 
-        mean_val_1_10 = torch.stack([self.trainer.callback_metrics[f'val_{i}'] for i in [1, 10]]).mean()
-        
+        for i in [1, 5]: 
+            self.log(f'val_{i}', metrics[i-1] * 100.0, on_epoch=True, prog_bar=False, logger=True, sync_dist=True) 
+
+        mean_val_1_10 = torch.stack([self.trainer.callback_metrics[f'val_{i}'] for i in [1, 5]]).mean()
         self.log('val_mean', mean_val_1_10, on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
         self.eval_metrics.reset()
 
-        try: # Validate only cannot get LR so pass it.
-            current_lr = self.trainer.lr_scheduler_configs[0].scheduler.get_last_lr()[0]
+        # try: # Validate only cannot get LR so pass it.
+        current_lr = self.trainer.lr_scheduler_configs[0].scheduler.get_last_lr()[0]
+        if isinstance(current_lr, float):
             self.log('current_lr', current_lr, on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
-        except:
-            pass
+        # except:
+            # pass
     
     def test_step(self, batch, batch_idx):
         batch_keys = batch.keys()
@@ -228,7 +222,11 @@ class Vanilla(pl.LightningModule):
         image = image.to(device)
         x_out = self.forward(image=image, branch=branch, stage='test')
         x_out = x_out.cpu().detach().numpy()
-        self.test_outputs[branch][batch['id'][0]] = x_out
+        if branch == 'satellite':
+            id = int(batch['label'][0])
+        elif branch == 'streetview':
+            id = int(batch['label'][0].split('_')[1])
+        self.test_outputs[branch][id] = x_out
 
     def on_test_epoch_end(self):
         streetview_keys = []
@@ -237,6 +235,7 @@ class Vanilla(pl.LightningModule):
                 line = line.strip()
                 streetview_keys.append(line.split('.')[0])
         satellite_keys = list(self.test_outputs['satellite'].keys())
+
         streetview_embeddings = [self.test_outputs['streetview'][x] for x in streetview_keys]
         satellite_embeddings = [self.test_outputs['satellite'][x] for x in satellite_keys]
         print(f'# query street images: ', len(streetview_embeddings))

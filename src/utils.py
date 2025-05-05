@@ -51,7 +51,7 @@ class CMCmAPMetric(Metric):
         self.add_state("gallery_features", default=[], dist_reduce_fx="cat")
         self.add_state("gallery_ids", default=[], dist_reduce_fx="cat")
     
-    def update(self, feature: Tensor, id: int, branch: str):
+    def update(self, feature: Tensor, id: str, branch: str):
         if branch == "satellite":
             self.gallery_features.append(feature)
             self.gallery_ids.append(torch.tensor([id], device=feature.device))
@@ -67,7 +67,7 @@ class CMCmAPMetric(Metric):
         query_ids = dim_zero_cat(self.query_ids)  # [Nq]
         gallery_features = dim_zero_cat(self.gallery_features)  # [Ng, D]
         gallery_ids = dim_zero_cat(self.gallery_ids)  # [Ng]
-
+        
         cmc = torch.zeros(len(gallery_ids), dtype=torch.float, device=query_features.device)
         ap = 0.0
         count = 0
@@ -90,6 +90,9 @@ class CMCmAPMetric(Metric):
 
         cmc /= count
         ap = (ap / count) * 100
+
+        # Needed for debug mode
+        self.ranks = [x for x in self.ranks if x <= len(gallery_ids)]
 
         string = []
         for i in self.ranks:
