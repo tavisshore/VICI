@@ -6,7 +6,7 @@ import torch
 from torch.utils.data import Dataset
 import timm
 from dotmap import DotMap
-from database import ImageDatabase
+from src.data.database import ImageDatabase
 from PIL import Image
 # from database import ImageDatabase
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -49,11 +49,11 @@ def lmdb_stage_keys(cfg, lmdb, stage, val_prop=0.01):
             for line in f.readlines():
                 line = line.strip()
                 id = Path(cfg.data.root) / 'test/workshop_query_street' / line
-                image_pairs[counter] = DotMap(streetview=id, name=id.stem)
+                image_pairs[counter] = DotMap(streetview=id, label=id.stem)
                 counter += 1
 
         for id in (Path(cfg.data.root) / 'test/workshop_gallery_satellite').iterdir():
-            image_pairs[counter] = DotMap(satellite=id, name=id.stem)
+            image_pairs[counter] = DotMap(satellite=id, label=id.stem)
             counter += 1
 
     return image_pairs
@@ -88,11 +88,11 @@ class University1652_LMDB(Dataset):
             if 'streetview' in keys:
                 streetview = Image.open(img_dict.streetview).convert('RGB')
                 streetview = self.transform(streetview)
-                return {'streetview': streetview, 'name': str(img_dict.name)}
+                return {'streetview': streetview, 'label': str(img_dict.label)}
             else:
                 satellite = Image.open(img_dict.satellite).convert('RGB')
                 satellite = self.transform(satellite)
-                return {'satellite': satellite, 'name': str(img_dict.name)}
+                return {'satellite': satellite, 'label': str(img_dict.label)}
         else:        
             non_sat_images = self.images[sat_id]
             index = torch.randint(0, len(non_sat_images), (1,)).item()

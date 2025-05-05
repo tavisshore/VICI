@@ -222,10 +222,7 @@ class Vanilla(pl.LightningModule):
         image = image.to(device)
         x_out = self.forward(image=image, branch=branch, stage='test')
         x_out = x_out.cpu().detach().numpy()
-        if branch == 'satellite':
-            id = int(batch['label'][0])
-        elif branch == 'streetview':
-            id = int(batch['label'][0].split('_')[1])
+        id = batch['label'][0]
         self.test_outputs[branch][id] = x_out
 
     def on_test_epoch_end(self):
