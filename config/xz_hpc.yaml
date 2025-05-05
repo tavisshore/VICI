@@ -1,9 +1,9 @@
-exp_name: 'hpc_4xGPU'
+exp_name: 'dinov2_large_4gpu_100ep'
 
 system:
   gpus: 4
   workers: 0
-  batch_size: 24
+  batch_size: 8
   path: '/work1/wshah/xzhang/challenge'
   results_path: '/work1/wshah/xzhang/challenge/src/results/'
   amd_cluster: True
@@ -15,11 +15,11 @@ data:
 
 model:
   shared_extractor: False
-  backbone: 'vit'
-  size: 'base'
-  image_size: 384
-  epochs: 50
-  lr: 1e-4
+  backbone: 'dinov2'
+  size: 'large'
+  image_size: 518
+  epochs: 100
+  lr: 1e-5
   miner: False
 
 
