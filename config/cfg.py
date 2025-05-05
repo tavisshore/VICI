@@ -29,7 +29,7 @@ _C.system.amd_cluster = False
 _C.data = CN()
 _C.data.root = f'/scratch/datasets/University/'
 _C.data.query_file = "src/data/query_street_name.txt"
-_C.data.type = 'folder' # 'lmdb', 'folder', #'ffcv
+_C.data.type = 'folder' # 'lmdb', 'folder',
 _C.data.sample_equal = True
 
 

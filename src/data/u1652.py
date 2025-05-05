@@ -84,7 +84,11 @@ class University1652_CVGL(Dataset):
                     self.pair_keys.append(DotMap(pair=id, index=list(range(len(streetviews)))))
 
             # ADD GOOGLE AND MAYBE DRONE IMAGES TO SET
-            
+            if self.cfg.data.google_input:
+                pass
+
+            if self.cfg.data.drone_input:
+                pass
 
 
         elif stage == 'val':
