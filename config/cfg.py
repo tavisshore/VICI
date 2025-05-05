@@ -16,26 +16,27 @@ _C.system.workers = 4
 _C.system.path = str(Path(__file__).parent.parent.resolve())
 _C.system.tune = CN()
 _C.system.tune.lr = False
-_C.system.tune.batch_size = False
+_C.system.tune.batch_size = True
 _C.system.results_path = _C.system.path + '/results/'
-_C.system.scheduler = 'plateau' # 'step' or 'plateau' or 'cos'
+_C.system.scheduler = 'cos' # 'step' or 'plateau' or 'cos'
 _C.system.batch_size = 8
 
 # This is a dumb paramerter. 
 # But I need to disable wandb logger in this cluser to avoid freezing
-_C.system.amd_cluster = True
+_C.system.amd_cluster = False
 
 
 _C.data = CN()
-_C.data.root = f'/home/{getpass.getuser()}/datasets/challenge/lmdb/'
+_C.data.root = f'/scratch/datasets/University/'
 _C.data.query_file = "src/data/query_street_name.txt"
-_C.data.type = 'lmdb' # 'lmdb', 'folder'
+_C.data.type = 'lmdb' # 'lmdb', 'folder',
 _C.data.sample_equal = True
-
-
+_C.data.use_drone = False
+_C.data.use_google = False
+_C.data.val_prop = 0.1
 
 _C.model = CN()
-_C.model.epochs = 200
+_C.model.epochs = 10
 _C.model.lr = 1e-4
 
 _C.model.backbone = 'convnext' # 'convnext', 'dinov2

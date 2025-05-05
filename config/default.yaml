@@ -4,10 +4,11 @@ system:
   workers: 4
   batch_size: 8
 
+  
+
 model:
   backbone: 'convnext'
   size: 'tiny'
   image_size: 224
-
-
-
+  epochs: 10
+  lr: 1e-4

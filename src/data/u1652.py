@@ -75,7 +75,6 @@ class University1652_CVGL(Dataset):
         if stage == 'train':
             self.satellite_path = self.root / 'satellite'
             self.sub_dirs = [x.stem for x in self.satellite_path.iterdir() if x.is_dir()]
-            
             # Validation references same as train or not - split before or after - better way?
             self.pair_keys = []
             for id in self.sub_dirs:
@@ -84,6 +83,7 @@ class University1652_CVGL(Dataset):
                 satellite = [x for x in (self.root / 'satellite' / id).iterdir() if x.is_file()]
                 self.image_pairs[id] = DotMap()
                 sat_counter += 1
+
                 for i_s, s in enumerate(streetviews):
                     self.image_pairs[id][i_s] = DotMap(streetview=s, satellite=satellite[0], pair=id, idx=i_s)
                     street_counter += 1
@@ -93,17 +93,20 @@ class University1652_CVGL(Dataset):
                         self.pair_keys.append(DotMap(pair=id, index=i_s))
                 if self.cfg.data.sample_equal: # Only one image pair per satellite reference - randomly select streetview at runtime
                     self.pair_keys.append(DotMap(pair=id, index=list(range(len(streetviews)))))
+
+            # ADD GOOGLE AND MAYBE DRONE IMAGES TO SET
+            if self.cfg.data.google_input:
+                pass
+
+            if self.cfg.data.drone_input:
+                pass
+
+
         elif stage == 'val':
             self.satellite_path = self.root / 'gallery_satellite'
             self.street_path = self.root / 'query_street'
             self.satellite_ids = [x.stem for x in self.satellite_path.iterdir() if x.is_dir()]
             self.street_ids = [x.stem for x in self.street_path.iterdir() if x.is_dir()]
-
-            # print(self.satellite_ids)
-            # print(self.street_ids)
-            # set2 = set(self.street_ids)
-            # diff = [item for item in self.satellite_ids if item not in set2]
-            # print("diff: ", len(diff))
 
             self.pair_keys = []
             # querys for each satellite
@@ -122,7 +125,6 @@ class University1652_CVGL(Dataset):
 
             self.pair_keys = list(self.image_pairs.keys())
 
-                
         elif stage == 'test':
             counter = 0
 
@@ -134,12 +136,15 @@ class University1652_CVGL(Dataset):
                     counter += 1
                     street_counter += 1
 
-
             for id in (self.root / 'workshop_gallery_satellite').iterdir():
                 self.image_pairs[counter] = DotMap(satellite=id, name=id.stem)
                 counter += 1
                 sat_counter += 1
             self.pair_keys = list(self.image_pairs.keys())
+
+
+
+
 
     def __len__(self):
         return len(self.pair_keys)
@@ -187,18 +192,27 @@ class University1652_CVGL(Dataset):
 
             
 if __name__ == '__main__':
+    # from yacs.config import CfgNode as CN
+    # cfg = CN()
+    # cfg.data = CN()
+    # cfg.data.root = '/scratch/datasets/University/'
+    # cfg.data.sample_equal = False
+    # cfg.data.query_file = '/scratch/projects/challenge/src/data/query_street_name.txt'
+
+    # for stage in ['test']:
+    #     data = University1652_CVGL(cfg=cfg, stage=stage)
+    #     print(f'{stage} - {data.__len__()}')
+
     from yacs.config import CfgNode as CN
     cfg = CN()
     cfg.data = CN()
-    cfg.data.root = '/work1/wshah/xzhang/data/university-1652/University-1652'
-    cfg.data.sample_equal = True
-    data = University1652_CVGL(cfg=cfg, stage='val')
-    item = data.__getitem__(0)
+    cfg.data.root = '/scratch/datasets/University/'
+    cfg.data.sample_equal = False
+    cfg.data.query_file = '/scratch/projects/challenge/src/data/query_street_name.txt'
     
-    print('len: ', len(data))
+    # print(f'RAW')
 
-    try:
-        print(item['streetview'].shape)
-    except:
-        print(item['satellite'].shape)
-    print(type(item['name']))
+
+    for stage in ['test']:
+        data = University1652_CVGL(cfg=cfg, stage=stage)
+        print(f'{stage} - {data.__len__()}')

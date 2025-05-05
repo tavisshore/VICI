@@ -1,4 +1,5 @@
 import argparse
+import torch
 import lightning.pytorch as pl
 from lightning.pytorch import loggers as plg
 from lightning.pytorch.callbacks import ModelCheckpoint
@@ -10,6 +11,8 @@ from src.utils import results_dir
 
 
 pl.seed_everything(42)
+if torch.cuda.is_available():
+    torch.set_float32_matmul_precision('high')
 
 args = argparse.ArgumentParser()
 args.add_argument('--debug', action='store_true')
@@ -46,14 +49,14 @@ else:
 
 checkpoint_callback = ModelCheckpoint(monitor="val_mean", mode="max", dirpath=f'{cfg.system.results_path}/ckpts/', save_top_k=1, filename='{epoch}-{val_mean:.2f}')
 
-# model = Vanilla(cfg)
-model = SSL(cfg)
+model = Vanilla(cfg)
+# model = SSL(cfg)
 
 trainer = pl.Trainer(max_epochs=cfg.model.epochs, devices=cfg.system.gpus, 
                      logger=wandb_logger if not cfg.debug else None,
                      callbacks=[checkpoint_callback],
                      check_val_every_n_epoch=2,
-                     overfit_batches=4 if cfg.debug else 0,
+                     overfit_batches=16 if cfg.debug else 0,
                      num_sanity_val_steps=0,
                      strategy='auto',
                      default_root_dir=cfg.system.results_path,
@@ -63,9 +66,11 @@ trainer = pl.Trainer(max_epochs=cfg.model.epochs, devices=cfg.system.gpus,
 
 if cfg.system.gpus == 1 and not cfg.debug:
     tuner = Tuner(trainer)
-    if cfg.system.tune.lr: cfg.model.lr = tuner.lr_find(model)
-    if cfg.system.tune.batch_size: tuner.scale_batch_size(model, mode='power', init_val=cfg.system.batch_size)
-        
+    if cfg.system.tune.lr: 
+        cfg.model.lr = tuner.lr_find(model)
+    if cfg.system.tune.batch_size: 
+        cfg.system.batch_size = tuner.scale_batch_size(model, mode='power', init_val=cfg.system.batch_size)
+
 trainer.fit(model)
 
 ###
@@ -76,3 +81,4 @@ if trainer.local_rank == 0:
     trainer.test(model, ckpt_path=checkpoint_callback.best_model_path)
 else: # Nothing to do in other rank, just put as a barrier here.
     pass
+
