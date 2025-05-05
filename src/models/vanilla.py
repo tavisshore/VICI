@@ -200,8 +200,7 @@ class Vanilla(pl.LightningModule):
     def on_validation_epoch_end(self):
         metrics = self.eval_metrics.compute()
 
-
-        for i in [1, 5]: 
+        for i in [1, 5, 10]: 
             self.log(f'val_{i}', metrics[i-1] * 100.0, on_epoch=True, prog_bar=False, logger=True, sync_dist=True) 
 
         mean_val_1_10 = torch.stack([self.trainer.callback_metrics[f'val_{i}'] for i in [1, 5]]).mean()

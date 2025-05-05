@@ -12,7 +12,7 @@ from PIL import Image
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
-def lmdb_stage_keys(cfg, lmdb, stage, val_prop=0.01):
+def lmdb_stage_keys(cfg, lmdb, stage):
     image_pairs = DotMap()
 
     if stage == 'train' or stage == 'val':
@@ -34,9 +34,9 @@ def lmdb_stage_keys(cfg, lmdb, stage, val_prop=0.01):
 
         img_keys = list(image_pairs.keys())
         if stage == 'val':
-            img_keys = img_keys[int((1-val_prop)*len(img_keys)):]
+            img_keys = img_keys[int((1-cfg.data.val_prop)*len(img_keys)):]
         else:
-            img_keys = img_keys[:int((1-val_prop)*len(img_keys))]                
+            img_keys = img_keys[:int((1-cfg.data.val_prop)*len(img_keys))]                
 
         new_dict = DotMap()
         for k in img_keys:
@@ -67,7 +67,7 @@ class University1652_LMDB(Dataset):
         
         self.transform = timm.data.create_transform(**data_config, 
                                                     is_training=True if stage == 'train' else False,
-                                                    #  train_crop_mode='random',
+                                                     train_crop_mode='rrc',
                                                      scale=(0.8, 1.0),
                                                     # TODO: Add augmentations
         )

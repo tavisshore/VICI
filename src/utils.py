@@ -51,7 +51,7 @@ class CMCmAPMetric(Metric):
         self.add_state("gallery_features", default=[], dist_reduce_fx="cat")
         self.add_state("gallery_ids", default=[], dist_reduce_fx="cat")
     
-    def update(self, feature: Tensor, id: str, branch: str):
+    def update(self, feature: Tensor, id: int, branch: str):
         if branch == "satellite":
             self.gallery_features.append(feature)
             self.gallery_ids.append(torch.tensor([id], device=feature.device))
@@ -67,7 +67,7 @@ class CMCmAPMetric(Metric):
         query_ids = dim_zero_cat(self.query_ids)  # [Nq]
         gallery_features = dim_zero_cat(self.gallery_features)  # [Ng, D]
         gallery_ids = dim_zero_cat(self.gallery_ids)  # [Ng]
-        
+
         cmc = torch.zeros(len(gallery_ids), dtype=torch.float, device=query_features.device)
         ap = 0.0
         count = 0
@@ -90,9 +90,6 @@ class CMCmAPMetric(Metric):
 
         cmc /= count
         ap = (ap / count) * 100
-
-        # Needed for debug mode
-        self.ranks = [x for x in self.ranks if x <= len(gallery_ids)]
 
         string = []
         for i in self.ranks:
@@ -156,8 +153,15 @@ def get_backbone(cfg):
             }
         },  
         'dinov2': {
-            'tiny': 'timm/vit_small_patch14_reg4_dinov2.lvd142m', 
-            'base': 'timm/vit_base_patch14_reg4_dinov2.lvd142m'
+            'tiny': {
+                518: 'timm/vit_small_patch14_reg4_dinov2.lvd142m',
+            },
+            'base': {
+                518: 'timm/vit_base_patch14_reg4_dinov2.lvd142m',
+             },
+             'large': {
+                518: 'timm/vit_large_patch14_dinov2.lvd142m',
+             },
         },
         'vit': {
             'tiny': {
@@ -170,22 +174,29 @@ def get_backbone(cfg):
             'base': {
                 224: 'timm/vit_base_patch16_224.augreg_in21k_ft_in1k',
                 384: 'timm/vit_base_patch16_384.augreg_in21k_ft_in1k'
+            }   
+        },
+        'eva02':{
+            'base':{
+                224: 'timm/eva02_base_patch16_clip_224.merged2b_s8b_b131k',
             },
-            'huge': {
-                224: 'timm/vit_huge_patch14_224.orig_in21k',
-                336: 'timm/vit_huge_patch14_clip_336.laion2b_ft_in12k_in1k'
-            }
+            'large':{
+                448: 'timm/eva02_large_patch14_448.mim_m38m_ft_in22k_in1k',
+            },
+            'enormous':{
+                224: 'timm/eva02_enormous_patch14_plus_clip_224.laion2b_s9b_b144k'
+            },
         }
     }
 
     assert cfg.model.backbone in backbones, f"Backbone {cfg.model.backbone} not supported"
     assert cfg.model.size in backbones[cfg.model.backbone], f"Size {cfg.model.size} not supported for {cfg.model.backbone}"
-    # assert cfg.model.image_size in backbones[cfg.model.backbone][cfg.model.size], f"Image size {cfg.model.image_size} not supported for {cfg.model.backbone} {cfg.model.size}"
+    assert cfg.model.image_size in backbones[cfg.model.backbone][cfg.model.size], f"Image size {cfg.model.image_size} not supported for {cfg.model.backbone} {cfg.model.size}"
 
     network = backbones[cfg.model.backbone][cfg.model.size]
     if cfg.model.backbone != 'dinov2':
         network = network[cfg.model.image_size]
 
-    return timm.create_model(network, pretrained=True, num_classes=0)
+    return timm.create_model(backbones[cfg.model.backbone][cfg.model.size][cfg.model.image_size], pretrained=True, num_classes=0)
 
     

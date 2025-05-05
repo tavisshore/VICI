@@ -4,11 +4,11 @@ system:
   workers: 4
   batch_size: 8
 
+  
+
 model:
-  shared_extractor: False
   backbone: 'convnext'
   size: 'tiny'
   image_size: 224
-  epochs: 4
+  epochs: 10
   lr: 1e-4
-  miner: False

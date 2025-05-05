@@ -1,8 +1,8 @@
-exp_name: 'hpc'
+exp_name: 'DINO-L'
 
 system:
   gpus: 1
-  workers: 0
+  workers: 4
   batch_size: 32
   scheduler: 'cos'
   path: '/mnt/fast/nobackup/users/ts00987/vol/research/deep_localisation/challenge/'
@@ -15,12 +15,14 @@ data:
   root: '/mnt/fast/nobackup/scratch4weeks/ts00987/datasets/University/'
   query_file: "src/data/query_street_name.txt"
   type: 'folder'
+  use_drone: False
+  use_google: True
 
 model:
   shared_extractor: False
-  backbone: 'vit'
-  size: 'huge'
-  image_size: 336
+  backbone: 'dinov2'
+  size: 'large'
+  image_size: 518
   epochs: 300
   lr: 1e-4
 

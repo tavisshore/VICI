@@ -33,7 +33,7 @@ _C.data.type = 'lmdb' # 'lmdb', 'folder',
 _C.data.sample_equal = True
 _C.data.use_drone = False
 _C.data.use_google = False
-
+_C.data.val_prop = 0.1
 
 _C.model = CN()
 _C.model.epochs = 10

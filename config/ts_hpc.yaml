@@ -1,4 +1,4 @@
-exp_name: 'hpc'
+exp_name: 'DINO-L'
 
 system:
   gpus: 1
@@ -8,7 +8,7 @@ system:
   path: '/mnt/fast/nobackup/users/ts00987/vol/research/deep_localisation/challenge/'
   results_path: '/mnt/fast/nobackup/users/ts00987/vol/research/deep_localisation/challenge/results/'
   tune:
-    batch_size: False
+    batch_size: True
 
 
 data:
@@ -21,7 +21,7 @@ data:
 model:
   shared_extractor: False
   backbone: 'dinov2'
-  size: 'base'
+  size: 'large'
   image_size: 518
   epochs: 300
   lr: 1e-4

@@ -47,7 +47,7 @@ else:
     cfg.system.gpus = 1
     wandb_logger = None
 
-checkpoint_callback = ModelCheckpoint(monitor="train_mean", mode="max", dirpath=f'{cfg.system.results_path}/ckpts/', save_top_k=1, filename='{epoch}-{train_mean:.2f}')
+checkpoint_callback = ModelCheckpoint(monitor="val_mean", mode="max", dirpath=f'{cfg.system.results_path}/ckpts/', save_top_k=1, filename='{epoch}-{val_mean:.2f}')
 
 model = Vanilla(cfg)
 # model = SSL(cfg)
