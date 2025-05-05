@@ -57,7 +57,6 @@ class ProjectionHead(nn.Module):
         x = self.layers(x)
         return x
 
-
 class FeatureExtractor(pl.LightningModule):
     def __init__(self, cfg):
         super().__init__()

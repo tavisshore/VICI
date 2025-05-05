@@ -1,4 +1,4 @@
-exp_name: 'DINO-L'
+exp_name: 'DINO-L+G'
 
 system:
   gpus: 1
@@ -14,7 +14,7 @@ system:
 data:
   root: '/mnt/fast/nobackup/scratch4weeks/ts00987/datasets/University/'
   query_file: "src/data/query_street_name.txt"
-  type: 'folder'
+  type: 'lmdb'
   use_drone: False
   use_google: True
 

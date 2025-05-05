@@ -112,8 +112,6 @@ def results_dir(cfg):
     return results_folder
 
 def recall_accuracy(query, db, labels):
-    db_length = len(db)
-
     tree = KDTree(db)
     ks = [1, 5, 10]    
     metrics = {k: 0 for k in ks}
@@ -192,10 +190,6 @@ def get_backbone(cfg):
     assert cfg.model.backbone in backbones, f"Backbone {cfg.model.backbone} not supported"
     assert cfg.model.size in backbones[cfg.model.backbone], f"Size {cfg.model.size} not supported for {cfg.model.backbone}"
     assert cfg.model.image_size in backbones[cfg.model.backbone][cfg.model.size], f"Image size {cfg.model.image_size} not supported for {cfg.model.backbone} {cfg.model.size}"
-
-    network = backbones[cfg.model.backbone][cfg.model.size]
-    if cfg.model.backbone != 'dinov2':
-        network = network[cfg.model.image_size]
 
     return timm.create_model(backbones[cfg.model.backbone][cfg.model.size][cfg.model.image_size], pretrained=True, num_classes=0)
 
