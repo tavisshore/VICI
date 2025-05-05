@@ -15,7 +15,8 @@ data:
   root: '/mnt/fast/nobackup/scratch4weeks/ts00987/datasets/University/'
   query_file: "src/data/query_street_name.txt"
   type: 'folder'
-  drone_input: False
+  use_drone: False
+  use_google: False
 
 model:
   shared_extractor: False

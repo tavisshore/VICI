@@ -28,6 +28,13 @@ def lmdb_stage_keys(cfg, lmdb, stage, val_prop=0.01):
         for sat_id in sat_keys:
             image_pairs[sat_id] = [x for x in street_keys if x.split('_')[1] == sat_id.split('_')[1]]
 
+            # Use additional non-satellite images
+            if cfg.data.use_drone:
+                image_pairs[sat_id] += [x for x in drone_keys if x.split('_')[1] == sat_id.split('_')[1]]
+
+            if cfg.data.use_google:
+                image_pairs[sat_id] += [x for x in google_keys if x.split('_')[1] == sat_id.split('_')[1]]
+
         img_keys = list(image_pairs.keys())
         if stage == 'val':
             img_keys = img_keys[int((1-val_prop)*len(img_keys)):]
@@ -97,12 +104,9 @@ class University1652_LMDB(Dataset):
                     dic['id'] = img_dict['id']
                 return dic
         else:        
-            street_view_images = self.images[sat_id]
-            # print(street_view_images)
-            index = torch.randint(0, len(street_view_images), (1,)).item()
-
-            streetview = self.lmdb[street_view_images[index]].convert('RGB')
-            # print(sat_id)
+            non_sat_images = self.images[sat_id]
+            index = torch.randint(0, len(non_sat_images), (1,)).item()
+            streetview = self.lmdb[non_sat_images[index]].convert('RGB')
             satellite = self.lmdb[sat_id].convert('RGB')
             sat_name = sat_id.split('_')[1]
             # streetview = self.transform(streetview)
@@ -128,6 +132,8 @@ if __name__ == '__main__':
     cfg.data.root = '/scratch/datasets/University/'
     cfg.data.sample_equal = True
     cfg.data.query_file = '/scratch/projects/challenge/src/data/query_street_name.txt'
+    cfg.data.use_drone = False
+    cfg.data.use_google = True
     
     # print(f'RAW')
     # for stage in ['train', 'val', 'test']:
@@ -137,6 +143,6 @@ if __name__ == '__main__':
 
     for stage in ['train', 'val', 'test']:
         data = University1652_LMDB(cfg=cfg, stage=stage, data_config=data_config)
-        item = data.__getitem__(0)
-        print(item)
-        # print(f'{stage} - {data.__len__()}')
+        # item = data.__getitem__(0)
+        # print(item)
+        print(f'{stage} - {data.__len__()}')
