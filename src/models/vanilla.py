@@ -65,13 +65,19 @@ class FeatureExtractor(pl.LightningModule):
         self.street_conv = get_backbone(cfg)
         if not cfg.model.shared_extractor:
             self.sat_conv = deepcopy(self.street_conv)
+        
+        if cfg.data.use_drone:
+            self.drone_conv = deepcopy(self.street_conv)
+
 
         self.data_config = timm.data.resolve_model_data_config(self.street_conv)
 
-        if cfg.model.head.use:
+        if cfg.model.head.use: # not proper but we're not even using this
             self.street_head = ProjectionHead(cfg.mode.head.params.inter_dims, cfg.mode.head.params.hidden_dims, cfg.mode.head.params.output_dims)
-            if not cfg.model.shared_extractor:
+            if not cfg.model.shared_extractor and not cfg.data.use_drone:
                 self.sat_head = deepcopy(self.street_head)
+            elif not cfg.model.shared_extractor and cfg.data.use_drone:
+                self.drone_head = deepcopy(self.street_head)
 
     def embed_street(self, pov_tile: torch.Tensor) -> torch.Tensor: 
         x = self.street_conv(pov_tile)
@@ -83,6 +89,12 @@ class FeatureExtractor(pl.LightningModule):
         x = self.sat_conv(map_tile)
         if self.cfg.model.head.use:
             x = self.sat_head(x)
+        return x
+
+    def embed_drone(self, drone_tile: torch.Tensor) -> torch.Tensor: 
+        x = self.drone_conv(drone_tile)
+        if self.cfg.model.head.use:
+            x = self.drone_head(x)
         return x
     
 
@@ -123,7 +135,8 @@ class Vanilla(pl.LightningModule):
         self.test_dataset = University1652_LMDB(self.cfg, stage='test', data_config=self.model.data_config)
         return DataLoader(self.test_dataset, batch_size=1, num_workers=self.cfg.system.workers, shuffle=False)
     
-    def forward(self, street: torch.Tensor = None, sat: torch.Tensor = None, image: torch.Tensor = None, branch: str = 'streetview', stage: str = 'train'):
+    def forward(self, street: torch.Tensor = None, drone: torch.Tensor = None, sat: torch.Tensor = None, 
+                image: torch.Tensor = None, branch: str = 'streetview', stage: str = 'train'):
         if stage == 'test':
             if branch == 'streetview' or self.cfg.model.shared_extractor:
                 x = self.model.embed_street(image)
@@ -139,14 +152,18 @@ class Vanilla(pl.LightningModule):
         
         street_out = F.normalize(street_out, p=2, dim=1)
         sat_out = F.normalize(sat_out, p=2, dim=1)
-        return street_out, sat_out
+
+        if self.cfg.data.use_drone and drone is not None: # Validation
+            drone_out = self.model.embed_drone(drone)
+            drone_out = F.normalize(drone_out, p=2, dim=1)
+            return street_out, drone_out, sat_out
+        else:
+            return street_out, None, sat_out
 
     def training_step(self, batch, batch_idx):
-        street, sat = batch['streetview'], batch['satellite']
-        sat = sat.to(device)
-        street = street.to(device)
-        
-        street_out, sat_out = self(street, sat)
+        street, drone, sat = batch['streetview'], batch['drone'], batch['satellite']
+        # street, drone, sat = street.to(device), drone.to(device), sat.to(device)
+        street_out, drone_out, sat_out = self(street, drone, sat)
         
         # For gathering output on all GPUs
         all_street_outputs = self.all_gather(street_out, sync_grads=True)
@@ -154,9 +171,18 @@ class Vanilla(pl.LightningModule):
         # Combining world size dim and batch dim
         all_street_outputs = all_street_outputs.view(-1, street_out.shape[1])
         all_sat_outputs = all_sat_outputs.view(-1, sat_out.shape[1])
-        
-        loss = self.loss_func(all_sat_outputs, all_street_outputs)
 
+        # Options here for training:
+        # 1. Use drones as satellite image references - only training between street and drone
+        # 2. Also use drones as streetview image references - training between both branches
+        loss = self.loss_func(all_street_outputs, all_sat_outputs)
+
+        if self.cfg.data.use_drone: # Is this correct? 
+            all_drone_outputs = self.all_gather(drone_out, sync_grads=True)
+            all_drone_outputs = all_drone_outputs.view(-1, drone_out.shape[1])
+            loss += self.loss_func(all_street_outputs, all_drone_outputs)
+            loss += self.loss_func(all_drone_outputs, all_sat_outputs)
+        
         self.log('train_loss', loss, on_step=True, prog_bar=True, logger=True, sync_dist=True, batch_size=street.shape[0])
         self.train_loss.append(loss) 
         self.train_query.append([x.cpu().detach().numpy() for x in street_out])
@@ -188,9 +214,8 @@ class Vanilla(pl.LightningModule):
         return avg_loss
     
     def validation_step(self, batch, batch_idx):
-        street_out, sat_out = self.forward(street=batch['streetview'], sat=batch['satellite'], stage='val')
-        street_out = street_out.detach()
-        sat_out = sat_out.detach()
+        street_out, _, sat_out = self.forward(street=batch['streetview'], sat=batch['satellite'], stage='val')
+        street_out, sat_out = street_out.detach(), sat_out.detach()
         
         self.eval_metrics.update(street_out, int(batch['label'][0]), 'streetview')
         self.eval_metrics.update(sat_out, int(batch['label'][0]), 'satellite')
@@ -216,8 +241,7 @@ class Vanilla(pl.LightningModule):
             # pass
     
     def test_step(self, batch, batch_idx):
-        batch_keys = batch.keys()
-        branch = 'streetview' if 'streetview' in batch_keys else 'satellite'
+        branch = 'streetview' if 'streetview' in batch.keys() else 'satellite'
         image = batch[branch]
         image = image.to(device)
         x_out = self.forward(image=image, branch=branch, stage='test')

@@ -104,11 +104,12 @@ class University1652_LMDB(Dataset):
             satellite = self.lmdb[sat_id].convert('RGB')
             sat_name = sat_id.split('_')[1]
 
-            if self.cfg.data.use_drone and 'drone' in non_sat_images.keys():
+            if self.cfg.data.use_drone:
                 index = torch.randint(0, len(non_sat_images.drone), (1,)).item()
                 drone = self.lmdb[non_sat_images.drone[index]].convert('RGB')
                 drone = self.transform(drone)
-            else: drone = torch.tensor([])
+            else: 
+                drone = torch.tensor([])
             streetview = self.transform(streetview)
             satellite = self.transform(satellite)
             return {'streetview': streetview, 'drone': drone, 'satellite': satellite, 'label': sat_name}
