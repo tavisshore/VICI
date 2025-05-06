@@ -1,14 +1,17 @@
-exp_name: 'tiny'
+exp_name: 'debug'
 system:
   gpus: 1
   workers: 4
   batch_size: 8
 
-  
+data:
+  val_prop: 0.05
+  use_drone: False
+  use_google: True
 
 model:
   backbone: 'convnext'
   size: 'tiny'
   image_size: 224
-  epochs: 10
+  epochs: 50
   lr: 1e-4

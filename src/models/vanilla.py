@@ -145,6 +145,7 @@ class Vanilla(pl.LightningModule):
         street, sat = batch['streetview'], batch['satellite']
         sat = sat.to(device)
         street = street.to(device)
+        
         street_out, sat_out = self(street, sat)
         
         # For gathering output on all GPUs
@@ -177,7 +178,8 @@ class Vanilla(pl.LightningModule):
         # custom metric class from TorchMetrics.
         metrics = recall_accuracy(query, ref, train_labels)
 
-        for i in [1, 5, 10]: self.log(f'train_{i}', metrics[i], on_epoch=True, prog_bar=False, logger=True, sync_dist=True) 
+        for i in [1, 5, 10]: 
+            self.log(f'train_{i}', metrics[i], on_epoch=True, prog_bar=False, logger=True, sync_dist=True) 
         mean_train_1_10 = torch.stack([self.trainer.callback_metrics[f'train_{i}'] for i in [1, 5, 10]]).mean()
         self.log('train_mean', mean_train_1_10, on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
 
@@ -265,7 +267,7 @@ class Vanilla(pl.LightningModule):
         opt = torch.optim.AdamW(params=self.parameters(), lr=self.lr) 
         if self.cfg.system.scheduler == 'plateau':
             sch = ReduceLROnPlateau(optimizer=opt, mode='min', factor=0.5)
-            return [opt], [{"scheduler": sch, "interval": "epoch", 'frequency': 5, "monitor": "val_loss_epoch"}]
+            return [opt], [{"scheduler": sch, "interval": "epoch", 'frequency': 5, "monitor": "val_mean"}]
         elif self.cfg.system.scheduler == 'step':
             sch = StepLR(optimizer=opt, step_size=40, gamma=0.5)
             return [opt], [{"scheduler": sch, "interval": "epoch"}]

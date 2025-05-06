@@ -4,7 +4,6 @@ system:
   gpus: 1
   workers: 4
   batch_size: 32
-  scheduler: 'cos'
   path: '/mnt/fast/nobackup/users/ts00987/vol/research/deep_localisation/challenge/'
   results_path: '/mnt/fast/nobackup/users/ts00987/vol/research/deep_localisation/challenge/results/'
   tune:
@@ -23,7 +22,7 @@ model:
   backbone: 'dinov2'
   size: 'large'
   image_size: 518
-  epochs: 300
+  epochs: 1000
   lr: 1e-4
 
 

@@ -6,9 +6,13 @@ import torch
 from torch.utils.data import Dataset
 import timm
 from dotmap import DotMap
-from src.data.database import ImageDatabase
-from PIL import Image
-# from database import ImageDatabase
+if __name__ == '__main__':
+    from database import ImageDatabase
+else:
+    from src.data.database import ImageDatabase
+from PIL import Image, ImageFile
+ImageFile.LOAD_TRUNCATED_IMAGES = True 
+
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
@@ -17,20 +21,21 @@ def lmdb_stage_keys(cfg, lmdb, stage):
 
     if stage == 'train' or stage == 'val':
         all_keys = lmdb.keys
-        street_keys = [x for x in all_keys if 'street_' in x]
-        sat_keys = [x for x in all_keys if 'satellite_' in x]
-        drone_keys = [x for x in all_keys if 'drone_' in x]
-        google_keys = [x for x in all_keys if 'google_' in x]
+        street_keys = set([x for x in all_keys if 'street_' in x])
+        sat_keys = set([x for x in all_keys if 'satellite_' in x])
+        drone_keys = set([x for x in all_keys if 'drone_' in x])
+        google_keys = set([x for x in all_keys if 'google_' in x])
 
         for sat_id in sat_keys:
-            image_pairs[sat_id] = [x for x in street_keys if x.split('_')[1] == sat_id.split('_')[1]]
+            image_pairs[sat_id] = DotMap()
+            image_pairs[sat_id].streetview = [x for x in street_keys if x.split('_')[1] == sat_id.split('_')[1]]
 
             # Use additional non-satellite images
-            if cfg.data.use_drone:
-                image_pairs[sat_id] += [x for x in drone_keys if x.split('_')[1] == sat_id.split('_')[1]]
-
             if cfg.data.use_google:
-                image_pairs[sat_id] += [x for x in google_keys if x.split('_')[1] == sat_id.split('_')[1]]
+                image_pairs[sat_id].streetview += [x for x in google_keys if x.split('_')[1] == sat_id.split('_')[1]]
+
+            if cfg.data.use_drone:
+                image_pairs[sat_id].drone = [x for x in drone_keys if x.split('_')[1] == sat_id.split('_')[1]]
 
         img_keys = list(image_pairs.keys())
         if stage == 'val':
@@ -42,7 +47,6 @@ def lmdb_stage_keys(cfg, lmdb, stage):
         for k in img_keys:
             new_dict[k] = image_pairs[k]
         image_pairs = new_dict
-
     else:
         counter = 0
         with open(cfg.data.query_file, "r") as f:
@@ -95,13 +99,19 @@ class University1652_LMDB(Dataset):
                 return {'satellite': satellite, 'label': str(img_dict.label)}
         else:        
             non_sat_images = self.images[sat_id]
-            index = torch.randint(0, len(non_sat_images), (1,)).item()
-            streetview = self.lmdb[non_sat_images[index]].convert('RGB')
+            index = torch.randint(0, len(non_sat_images.streetview), (1,)).item()
+            streetview = self.lmdb[non_sat_images.streetview[index]].convert('RGB')
             satellite = self.lmdb[sat_id].convert('RGB')
             sat_name = sat_id.split('_')[1]
+
+            drone = None
+            if self.cfg.data.use_drone and 'drone' in non_sat_images.keys():
+                index = torch.randint(0, len(non_sat_images.drone), (1,)).item()
+                drone = self.lmdb[non_sat_images.drone[index]].convert('RGB')
+                drone = self.transform(drone)
             streetview = self.transform(streetview)
             satellite = self.transform(satellite)
-            return {'streetview': streetview, 'satellite': satellite, 'label': sat_name}
+            return {'streetview': streetview, 'drone': drone, 'satellite': satellite, 'label': sat_name}
 
             
 if __name__ == '__main__':
@@ -117,22 +127,22 @@ if __name__ == '__main__':
     data_config = timm.data.resolve_model_data_config(model)
 
     from yacs.config import CfgNode as CN
+    import random
+
     cfg = CN()
     cfg.data = CN()
     cfg.data.root = '/scratch/datasets/University/'
     cfg.data.sample_equal = True
     cfg.data.query_file = '/scratch/projects/challenge/src/data/query_street_name.txt'
-    cfg.data.use_drone = False
+    cfg.data.use_drone = True
     cfg.data.use_google = True
+    cfg.data.val_prop = 0.0
     
-    # print(f'RAW')
-    # for stage in ['train', 'val', 'test']:
-    #     data = University1652_RAW(cfg=cfg, stage=stage, data_config=data_config)
-    #     print(f'{stage} - {data.__len__()}')
-
-
-    for stage in ['train', 'val', 'test']:
+    for stage in ['train']:
         data = University1652_LMDB(cfg=cfg, stage=stage, data_config=data_config)
-        # item = data.__getitem__(0)
-        # print(item)
-        print(f'{stage} - {data.__len__()}')
+        item = data.__getitem__(random.randint(0, len(data)))
+        print(item)
+        item['streetview'].save('streetview.jpg') 
+        item['satellite'].save('satellite.jpg')
+        item['drone'].save('drone.jpg')
+        # print(f'{stage} - {data.__len__()}')

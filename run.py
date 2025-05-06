@@ -11,7 +11,7 @@ from src.utils import results_dir
 
 
 pl.seed_everything(42)
-if torch.cuda.is_available():
+if torch.cuda.is_available(): # Could even use this to simply separate our models etc.
     torch.set_float32_matmul_precision('high')
 
 args = argparse.ArgumentParser()
@@ -47,7 +47,8 @@ else:
     cfg.system.gpus = 1
     wandb_logger = None
 
-checkpoint_callback = ModelCheckpoint(monitor="val_mean", mode="max", dirpath=f'{cfg.system.results_path}/ckpts/', save_top_k=1, filename='{epoch}-{val_mean:.2f}')
+monitor = 'val_mean' if cfg.data.val_prop > 0 else 'train_mean'
+checkpoint_callback = ModelCheckpoint(monitor=monitor, mode="max", dirpath=f'{cfg.system.results_path}/ckpts/', save_top_k=1, filename='{epoch}')
 
 model = Vanilla(cfg)
 # model = SSL(cfg)
@@ -60,6 +61,7 @@ trainer = pl.Trainer(max_epochs=cfg.model.epochs, devices=cfg.system.gpus,
                      num_sanity_val_steps=0,
                      strategy='auto',
                      default_root_dir=cfg.system.results_path,
+                     log_every_n_steps=10,
                     #  gradient_clip_val=0.5, 
                     #  gradient_clip_algorithm="value",
                      )

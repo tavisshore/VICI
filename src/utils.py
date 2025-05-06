@@ -62,7 +62,6 @@ class CMCmAPMetric(Metric):
             raise NotImplementedError(f'{branch} is not implemented')
     
     def compute(self):
-        
         query_features = dim_zero_cat(self.query_features)  # [Nq, D]
         query_ids = dim_zero_cat(self.query_ids)  # [Nq]
         gallery_features = dim_zero_cat(self.gallery_features)  # [Ng, D]
@@ -150,17 +149,6 @@ def get_backbone(cfg):
                 384: 'timm/convnextv2_base.fcmae_ft_in22k_in1k_384'
             }
         },  
-        'dinov2': {
-            'tiny': {
-                518: 'timm/vit_small_patch14_reg4_dinov2.lvd142m',
-            },
-            'base': {
-                518: 'timm/vit_base_patch14_reg4_dinov2.lvd142m',
-             },
-             'large': {
-                518: 'timm/vit_large_patch14_dinov2.lvd142m',
-             },
-        },
         'vit': {
             'tiny': {
                 224: 'timm/vit_tiny_patch16_224.augreg_in21k_ft_in1k',
@@ -173,6 +161,17 @@ def get_backbone(cfg):
                 224: 'timm/vit_base_patch16_224.augreg_in21k_ft_in1k',
                 384: 'timm/vit_base_patch16_384.augreg_in21k_ft_in1k'
             }   
+        },
+        'dinov2': {
+            'tiny': {
+                518: 'timm/vit_small_patch14_reg4_dinov2.lvd142m',
+            },
+            'base': {
+                518: 'timm/vit_base_patch14_reg4_dinov2.lvd142m',
+             },
+             'large': {
+                518: 'timm/vit_large_patch14_dinov2.lvd142m',
+             },
         },
         'eva02':{
             'base':{
@@ -191,6 +190,14 @@ def get_backbone(cfg):
     assert cfg.model.size in backbones[cfg.model.backbone], f"Size {cfg.model.size} not supported for {cfg.model.backbone}"
     assert cfg.model.image_size in backbones[cfg.model.backbone][cfg.model.size], f"Image size {cfg.model.image_size} not supported for {cfg.model.backbone} {cfg.model.size}"
 
-    return timm.create_model(backbones[cfg.model.backbone][cfg.model.size][cfg.model.image_size], pretrained=True, num_classes=0)
+    model = timm.create_model(backbones[cfg.model.backbone][cfg.model.size][cfg.model.image_size], pretrained=True, num_classes=0)
+
+    # ensure all parameters are trainable
+    for param in model.parameters():
+        param.requires_grad = True
+    # set the model to train mode
+    model.train()
+
+    return model
 
     
