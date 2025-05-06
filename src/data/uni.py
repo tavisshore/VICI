@@ -47,6 +47,19 @@ def lmdb_stage_keys(cfg, lmdb, stage):
         for k in img_keys:
             new_dict[k] = image_pairs[k]
         image_pairs = new_dict
+
+    elif stage == 'test':
+        all_keys = lmdb.keys
+        street_keys = set([x for x in all_keys if 'street_' in x])
+        sat_keys = set([x for x in all_keys if 'satellite_' in x])
+
+        counter = 0
+        for sat_id in sat_keys:
+            image_pairs[counter] = DotMap(satellite=sat_id, label=sat_id.split('_')[1])                
+            counter += 1
+        for street_id in street_keys:
+            image_pairs[counter] = DotMap(streetview=street_id, label=street_id.split('_')[1])
+            counter += 1
     else:
         counter = 0
         with open(cfg.data.query_file, "r") as f:
@@ -76,7 +89,7 @@ class University1652_LMDB(Dataset):
                                                     # TODO: Add augmentations
         )
         
-        self.lmdb = ImageDatabase(path=f'{cfg.data.root}/lmdb/{self.data_stage}') if stage != 'test' else None
+        self.lmdb = ImageDatabase(path=f'{cfg.data.root}/lmdb/{self.data_stage}') if stage != 'predict' else None
         self.images = lmdb_stage_keys(cfg, self.lmdb, stage)
         self.pair_keys = list(self.images.keys())
 
@@ -86,7 +99,7 @@ class University1652_LMDB(Dataset):
     def __getitem__(self, idx):
         sat_id = self.pair_keys[idx]
 
-        if self.stage == 'test':
+        if self.stage == 'predict':
             img_dict = self.images[sat_id]
             keys = img_dict.keys()
             if 'streetview' in keys:
@@ -97,6 +110,17 @@ class University1652_LMDB(Dataset):
                 satellite = Image.open(img_dict.satellite).convert('RGB')
                 satellite = self.transform(satellite)
                 return {'satellite': satellite, 'label': str(img_dict.label)}
+        elif self.stage == 'test':
+            img_dict = self.images[sat_id]
+            keys = img_dict.keys()
+            if 'streetview' in keys:
+                streetview = self.lmdb[img_dict.streetview].convert('RGB')
+                streetview = self.transform(streetview)
+                return {'streetview': streetview, 'label': str(img_dict.label)}
+            else:
+                satellite = self.lmdb[img_dict.satellite].convert('RGB')
+                satellite = self.transform(satellite)
+                return {'satellite': satellite, 'label': str(img_dict.label)}
         else:        
             non_sat_images = self.images[sat_id]
             index = torch.randint(0, len(non_sat_images.streetview), (1,)).item()
@@ -104,7 +128,7 @@ class University1652_LMDB(Dataset):
             satellite = self.lmdb[sat_id].convert('RGB')
             sat_name = sat_id.split('_')[1]
 
-            if self.cfg.data.use_drone:
+            if self.cfg.data.use_drone and self.stage != 'test':
                 index = torch.randint(0, len(non_sat_images.drone), (1,)).item()
                 drone = self.lmdb[non_sat_images.drone[index]].convert('RGB')
                 drone = self.transform(drone)
@@ -139,11 +163,11 @@ if __name__ == '__main__':
     cfg.data.use_google = True
     cfg.data.val_prop = 0.0
     
-    for stage in ['train']:
+    for stage in ['test']:
         data = University1652_LMDB(cfg=cfg, stage=stage, data_config=data_config)
-        item = data.__getitem__(random.randint(0, len(data)))
-        print(item)
+        # item = data.__getitem__(random.randint(0, len(data)))
+        # print(item)
         # item['streetview'].save('streetview.jpg') 
         # item['satellite'].save('satellite.jpg')
         # item['drone'].save('drone.jpg')
-        # print(f'{stage} - {data.__len__()}')
+        print(f'{stage} - {data.__len__()}')

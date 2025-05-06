@@ -47,8 +47,8 @@ else:
     cfg.system.gpus = 1
     wandb_logger = None
 
-monitor = 'val_mean' if cfg.data.val_prop > 0 else 'train_mean'
-checkpoint_callback = ModelCheckpoint(monitor=monitor, mode="max", dirpath=f'{cfg.system.results_path}/ckpts/', save_top_k=1, filename='{epoch}')
+checkpoint_callback = ModelCheckpoint(monitor='val_mean' if cfg.data.val_prop > 0 else 'train_mean', mode="max", dirpath=f'{cfg.system.results_path}/ckpts/', 
+                                      save_top_k=1, filename='{epoch}')
 
 model = Vanilla(cfg)
 # model = SSL(cfg)
@@ -77,10 +77,6 @@ trainer.fit(model)
 
 ###
 # TODO: re-write here to use rank_0 decorate to have more elegant code
-if trainer.local_rank == 0:
-    trainer = pl.Trainer(devices=1, default_root_dir=cfg.system.results_path, callbacks=[checkpoint_callback])
-    # trainer.validate(model, ckpt_path=checkpoint_callback.best_model_path)
-    trainer.test(model, ckpt_path=checkpoint_callback.best_model_path)
-else: # Nothing to do in other rank, just put as a barrier here.
-    pass
-
+if trainer.local_rank == 0: # Does the rank sort any multiples issue?
+    model.run_predict()
+    

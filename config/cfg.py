@@ -44,6 +44,7 @@ _C.model.size = 'tiny'
 _C.model.image_size = 384
 _C.model.shared_extractor = False
 _C.model.miner = False
+_C.model.drone_weight = 1.0
 
 
 _C.model.head = CN()

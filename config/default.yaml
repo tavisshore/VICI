@@ -12,6 +12,7 @@ data:
 model:
   backbone: 'convnext'
   size: 'tiny'
-  image_size: 384
+  image_size: 224
   epochs: 100
   lr: 1e-4
+  drone_weight: 0.5

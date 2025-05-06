@@ -126,6 +126,7 @@ def recall_accuracy(query, db, labels):
 
     for gt_ind, ret_inds in enumerate(retrievals):
         indices = ground_truths[labels[gt_ind]]
+        # print(f'{labels[gt_ind]}: {indices} - {ret_inds}')
         for k in filter(lambda k: len(np.intersect1d(ret_inds[:k], indices)) > 0, ks):
             metrics[k] += 1
 

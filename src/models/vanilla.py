@@ -114,13 +114,14 @@ class Vanilla(pl.LightningModule):
         
         self.train_loss, self.val_loss, self.test_loss = [], [], []
         self.train_query, self.train_ref = [], []
+        self.test_query, self.test_ref = [], []
         
         self.eval_metrics = CMCmAPMetric()
-        
+        self.test_metrics = CMCmAPMetric()
+
         self.val_query_features, self.val_ref_features = [], []
         self.val_query_ids, self.val_ref_ids = [], []
-        self.train_labels, self.val_labels = [], []
-        
+        self.train_labels, self.val_labels, self.test_labels = [], [], []
         self.test_outputs = DotMap(streetview=DotMap(), satellite=DotMap())
 
     def train_dataloader(self):
@@ -137,7 +138,7 @@ class Vanilla(pl.LightningModule):
     
     def forward(self, street: torch.Tensor = None, drone: torch.Tensor = None, sat: torch.Tensor = None, 
                 image: torch.Tensor = None, branch: str = 'streetview', stage: str = 'train'):
-        if stage == 'test':
+        if stage == 'predict' or stage == 'test':
             if branch == 'streetview' or self.cfg.model.shared_extractor:
                 x = self.model.embed_street(image)
             else:
@@ -180,8 +181,8 @@ class Vanilla(pl.LightningModule):
         if self.cfg.data.use_drone: # Is this correct? 
             all_drone_outputs = self.all_gather(drone_out, sync_grads=True)
             all_drone_outputs = all_drone_outputs.view(-1, drone_out.shape[1])
-            loss += self.loss_func(all_street_outputs, all_drone_outputs)
-            loss += self.loss_func(all_drone_outputs, all_sat_outputs)
+            loss += self.cfg.model.drone_weight * self.loss_func(all_street_outputs, all_drone_outputs)
+            loss += self.cfg.model.drone_weight * self.loss_func(all_drone_outputs, all_sat_outputs)
         
         self.log('train_loss', loss, on_step=True, prog_bar=True, logger=True, sync_dist=True, batch_size=street.shape[0])
         self.train_loss.append(loss) 
@@ -229,27 +230,51 @@ class Vanilla(pl.LightningModule):
         for i in [1, 5, 10]: 
             self.log(f'val_{i}', metrics[i-1] * 100.0, on_epoch=True, prog_bar=False, logger=True, sync_dist=True) 
 
-        mean_val_1_10 = torch.stack([self.trainer.callback_metrics[f'val_{i}'] for i in [1, 5]]).mean()
+        mean_val_1_10 = torch.stack([self.trainer.callback_metrics[f'val_{i}'] for i in [1, 5, 10]]).mean()
         self.log('val_mean', mean_val_1_10, on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
         self.eval_metrics.reset()
 
-        # try: # Validate only cannot get LR so pass it.
-        current_lr = self.trainer.lr_scheduler_configs[0].scheduler.get_last_lr()[0]
-        if isinstance(current_lr, float):
+        try: # Validate only cannot get LR so pass it.
+            current_lr = self.trainer.lr_scheduler_configs[0].scheduler.get_last_lr()[0]
             self.log('current_lr', current_lr, on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
-        # except:
-            # pass
+        except:
+            pass
     
     def test_step(self, batch, batch_idx):
         branch = 'streetview' if 'streetview' in batch.keys() else 'satellite'
         image = batch[branch]
         image = image.to(device)
         x_out = self.forward(image=image, branch=branch, stage='test')
-        x_out = x_out.cpu().detach().numpy()
-        id = batch['label'][0]
-        self.test_outputs[branch][id] = x_out
+
+        if branch == 'streetview':
+            self.test_metrics.update(x_out, int(batch['label'][0]), 'streetview')
+        else:
+            self.test_metrics.update(x_out, int(batch['label'][0]), 'satellite')
 
     def on_test_epoch_end(self):
+        metrics = self.test_metrics.compute()
+
+        for i in [1, 5, 10]: 
+            self.log(f'test_{i}', metrics[i-1] * 100.0, on_epoch=True, prog_bar=False, logger=True, sync_dist=True) 
+
+        mean_val_1_10 = torch.stack([self.trainer.callback_metrics[f'test_{i}'] for i in [1, 5, 10]]).mean()
+        self.log('test_mean', mean_val_1_10, on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
+        self.eval_metrics.reset()
+        
+    def run_predict(self):
+        predict_dataset = University1652_LMDB(self.cfg, stage='predict', data_config=self.model.data_config)
+        predict_dataloader = DataLoader(predict_dataset, batch_size=1, num_workers=self.cfg.system.workers, shuffle=False)
+        self.predict_outputs = DotMap(streetview=DotMap(), satellite=DotMap())
+        self.trainer.predict(self, predict_dataloader, ckpt_path=self.trainer.checkpoint_callback.best_model_path)
+        
+    def predict_step(self, batch, batch_idx):
+        branch = 'streetview' if 'streetview' in batch.keys() else 'satellite'
+        image = batch[branch]
+        image = image.to(device)
+        x_out = self.forward(image=image, branch=branch, stage='test')
+        self.predict_outputs[branch][batch['label'][0]] = x_out.cpu().detach().numpy()
+
+    def on_predict_epoch_end(self):
         streetview_keys = []
         with open(self.cfg.data.query_file, "r") as f:
             for line in f.readlines():
@@ -286,7 +311,8 @@ class Vanilla(pl.LightningModule):
         self.trainer.save_checkpoint(f"{self.cfg.system.results_path}/final_model.ckpt")
         with open(f"{self.cfg.system.results_path}/config.yaml", "w") as f:
             f.write(self.cfg.dump())
-        
+
+
     def configure_optimizers(self):
         opt = torch.optim.AdamW(params=self.parameters(), lr=self.lr) 
         if self.cfg.system.scheduler == 'plateau':
