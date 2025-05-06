@@ -7,7 +7,7 @@ system:
 data:
   val_prop: 0.05
   use_drone: False
-  use_google: True
+  use_google: False
 
 model:
   backbone: 'convnext'

@@ -71,8 +71,8 @@ class University1652_LMDB(Dataset):
         
         self.transform = timm.data.create_transform(**data_config, 
                                                     is_training=True if stage == 'train' else False,
-                                                     train_crop_mode='rrc',
-                                                     scale=(0.8, 1.0),
+                                                    #  train_crop_mode='rrc',
+                                                    #  scale=(0.8, 1.0),
                                                     # TODO: Add augmentations
         )
         
@@ -104,11 +104,11 @@ class University1652_LMDB(Dataset):
             satellite = self.lmdb[sat_id].convert('RGB')
             sat_name = sat_id.split('_')[1]
 
-            drone = None
             if self.cfg.data.use_drone and 'drone' in non_sat_images.keys():
                 index = torch.randint(0, len(non_sat_images.drone), (1,)).item()
                 drone = self.lmdb[non_sat_images.drone[index]].convert('RGB')
                 drone = self.transform(drone)
+            else: drone = torch.tensor([])
             streetview = self.transform(streetview)
             satellite = self.transform(satellite)
             return {'streetview': streetview, 'drone': drone, 'satellite': satellite, 'label': sat_name}
@@ -142,7 +142,7 @@ if __name__ == '__main__':
         data = University1652_LMDB(cfg=cfg, stage=stage, data_config=data_config)
         item = data.__getitem__(random.randint(0, len(data)))
         print(item)
-        item['streetview'].save('streetview.jpg') 
-        item['satellite'].save('satellite.jpg')
-        item['drone'].save('drone.jpg')
+        # item['streetview'].save('streetview.jpg') 
+        # item['satellite'].save('satellite.jpg')
+        # item['drone'].save('drone.jpg')
         # print(f'{stage} - {data.__len__()}')

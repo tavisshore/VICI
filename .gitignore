@@ -5,6 +5,7 @@ src/results/*
 /ckpts
 /ckpts/*
 /answer.*
+/drones
 *.pyc 
 **/*.pyc
 # Byte-compiled / optimized / DLL files
