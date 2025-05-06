@@ -3,6 +3,7 @@ import torch
 import lightning.pytorch as pl
 from lightning.pytorch import loggers as plg
 from lightning.pytorch.callbacks import ModelCheckpoint
+from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.tuner.tuning import Tuner
 from src.models.vanilla import Vanilla
 from src.models.ssl import SSL
@@ -50,12 +51,14 @@ else:
 checkpoint_callback = ModelCheckpoint(monitor='val_mean' if cfg.data.val_prop > 0 else 'train_mean', mode="max", dirpath=f'{cfg.system.results_path}/ckpts/', 
                                       save_top_k=1, filename='{epoch}')
 
+early_stop_callback = EarlyStopping(monitor="train_1", min_delta=0.1, patience=10, verbose=False, mode="max", strict=False)
+
 model = Vanilla(cfg)
 # model = SSL(cfg)
 
 trainer = pl.Trainer(max_epochs=cfg.model.epochs, devices=cfg.system.gpus, 
                      logger=wandb_logger if not cfg.debug else None,
-                     callbacks=[checkpoint_callback],
+                     callbacks=[checkpoint_callback, early_stop_callback],
                      check_val_every_n_epoch=2,
                      overfit_batches=16 if cfg.debug else 0,
                      num_sanity_val_steps=0,
