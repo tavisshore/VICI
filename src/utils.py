@@ -202,3 +202,5 @@ def get_backbone(cfg):
     return model
 
     
+if __name__ == '__main__':
+    model = timm.create_model('timm/eva02_base_patch16_clip_224.merged2b_s8b_b131k', pretrained=True, num_classes=0)
