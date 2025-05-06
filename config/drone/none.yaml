@@ -1,4 +1,4 @@
-exp_name: 'DINO-L'
+exp_name: 'C-B-D_0'
 
 system:
   gpus: 1
@@ -18,11 +18,11 @@ data:
 
 model:
   shared_extractor: False
-  backbone: 'dinov2'
-  size: 'large'
-  image_size: 518
+  backbone: 'convnext'
+  size: 'base'
+  image_size: 384
   epochs: 500
-  lr: 1e-5
+  lr: 1e-4
   drone_weight: 0.0
 
 

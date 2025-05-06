@@ -280,12 +280,11 @@ class Vanilla(pl.LightningModule):
             for line in f.readlines():
                 line = line.strip()
                 streetview_keys.append(line.split('.')[0])
-        satellite_keys = list(self.test_outputs['satellite'].keys())
-
-        streetview_embeddings = [self.test_outputs['streetview'][x] for x in streetview_keys]
-        satellite_embeddings = [self.test_outputs['satellite'][x] for x in satellite_keys]
-        print(f'# query street images: ', len(streetview_embeddings))
-        print(f'# gallery satellite images: ', len(satellite_embeddings))
+        satellite_keys = list(self.predict_outputs['satellite'].keys())
+        streetview_embeddings = [self.predict_outputs['streetview'][x] for x in streetview_keys]
+        satellite_embeddings = [self.predict_outputs['satellite'][x] for x in satellite_keys]
+        print(f'# Query Street Images: {len(streetview_embeddings)}')
+        print(f'# Gallery Satellite Images: {len(satellite_embeddings)}')
         streetview = np.concatenate(streetview_embeddings)
         satellite = np.concatenate(satellite_embeddings)
 

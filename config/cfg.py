@@ -18,7 +18,7 @@ _C.system.tune = CN()
 _C.system.tune.lr = False
 _C.system.tune.batch_size = True
 _C.system.results_path = _C.system.path + '/results/'
-_C.system.scheduler = 'cos' # 'step' or 'plateau' or 'cos'
+_C.system.scheduler = 'cos'
 _C.system.batch_size = 8
 
 # This is a dumb paramerter. 

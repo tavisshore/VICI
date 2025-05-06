@@ -1,16 +1,15 @@
 #!/bin/bash
 
-#SBATCH --partition=3090                  #Selecting partition based on GPU type
-#SBATCH --job-name="UAVM+D"                  #Name of Jobs (displayed in squeue)
+#SBATCH --partition=rtx8000                  #Selecting partition based on GPU type
+#SBATCH --job-name="CTN"                  #Name of Jobs (displayed in squeue)
 #SBATCH --nodes=1                           #No of nodes to run job
 #SBATCH --ntasks-per-node=4                #No of cores to use per node
-#SBATCH --time=03:00:00                     #Maximum time for job to run
+#SBATCH --time=12:00:00                     #Maximum time for job to run
 #SBATCH --mem=50G                           #Amount of memory per node
 #SBATCH --gpus=1                            #Selecting 2 x GPUs
 #SBATCH --output=slurm.%N.%j.out            #Output file for stdout (optional)
 #SBATCH --error=slurm.%N.%j.err             #Error file for stderr (optional)
 
 # If using an apptainer image
-apptainer exec oras://container-registry.surrey.ac.uk/shared-containers/uavm:latest python run.py --config ts_hpc.yaml
+apptainer exec oras://container-registry.surrey.ac.uk/shared-containers/uavm:latest python run.py --config drone/none.yaml
 
-# apptainer exec oras://container-registry.surrey.ac.uk/shared-containers/uavm:latest python run.py --config ts_hpc_google.yaml

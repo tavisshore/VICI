@@ -1,4 +1,4 @@
-exp_name: 'DINO-L'
+exp_name: 'C-B-D_3'
 
 system:
   gpus: 1
@@ -13,16 +13,16 @@ system:
 data:
   root: '/mnt/fast/nobackup/scratch4weeks/ts00987/datasets/University/'
   query_file: "src/data/query_street_name.txt"
-  use_drone: False
+  use_drone: True
   use_google: False
 
 model:
   shared_extractor: False
-  backbone: 'dinov2'
-  size: 'large'
-  image_size: 518
+  backbone: 'convnext'
+  size: 'base'
+  image_size: 384
   epochs: 500
-  lr: 1e-5
-  drone_weight: 0.0
+  lr: 1e-4
+  drone_weight: 1.0
 
 
