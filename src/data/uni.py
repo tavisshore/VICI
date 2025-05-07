@@ -123,9 +123,9 @@ class University1652_LMDB(Dataset):
                 return {'satellite': satellite, 'label': str(img_dict.label)}
         else:        
             non_sat_images = self.images[sat_id]
-            if stage == 'train':
+            if self.stage == 'train':
                 index = torch.randint(0, len(non_sat_images.streetview), (1,)).item()
-            elif stage == 'val':
+            elif self.stage == 'val':
                 index = 0
             streetview = self.lmdb[non_sat_images.streetview[index]].convert('RGB')
             satellite = self.lmdb[sat_id].convert('RGB')
