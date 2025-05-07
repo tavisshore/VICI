@@ -123,7 +123,10 @@ class University1652_LMDB(Dataset):
                 return {'satellite': satellite, 'label': str(img_dict.label)}
         else:        
             non_sat_images = self.images[sat_id]
-            index = torch.randint(0, len(non_sat_images.streetview), (1,)).item()
+            if stage == 'train':
+                index = torch.randint(0, len(non_sat_images.streetview), (1,)).item()
+            elif stage == 'val':
+                index = 0
             streetview = self.lmdb[non_sat_images.streetview[index]].convert('RGB')
             satellite = self.lmdb[sat_id].convert('RGB')
             sat_name = sat_id.split('_')[1]
@@ -161,11 +164,11 @@ if __name__ == '__main__':
     cfg.data.query_file = '/scratch/projects/challenge/src/data/query_street_name.txt'
     cfg.data.use_drone = True
     cfg.data.use_google = True
-    cfg.data.val_prop = 0.0
+    cfg.data.val_prop = 0.05
     
-    for stage in ['test']:
+    for stage in ['val', 'test']:
         data = University1652_LMDB(cfg=cfg, stage=stage, data_config=data_config)
-        # item = data.__getitem__(random.randint(0, len(data)))
+        item = data.__getitem__(random.randint(0, len(data)))
         # print(item)
         # item['streetview'].save('streetview.jpg') 
         # item['satellite'].save('satellite.jpg')
