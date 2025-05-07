@@ -38,6 +38,7 @@ def lmdb_stage_keys(cfg, lmdb, stage):
                 image_pairs[sat_id].drone = [x for x in drone_keys if x.split('_')[1] == sat_id.split('_')[1]]
 
         img_keys = list(image_pairs.keys())
+        # TODO: select in ascneding order of list length - waste as little training data as possible
         if stage == 'val':
             img_keys = img_keys[int((1-cfg.data.val_prop)*len(img_keys)):]
         else:
