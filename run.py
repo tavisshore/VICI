@@ -81,7 +81,8 @@ trainer.fit(model)
 # save final model weights
 torch.save(model.model.state_dict(), f'{cfg.system.results_path}/final_weights.pth')
 
-trainer.test(model)
+# In predict anyway
+# trainer.test(model)
 
 ###
 # TODO: re-write here to use rank_0 decorate to have more elegant code

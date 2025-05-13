@@ -266,13 +266,13 @@ class Vanilla(pl.LightningModule):
         self.log('test_mean', mean_val_1_10, on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
         self.eval_metrics.reset()
         
-    # def run_predict(self, best_ckpt=None):
-
-    #     self.predict_outputs = DotMap(streetview=DotMap(), satellite=DotMap())
-    #     if best_ckpt is None:
-    #         self.trainer.predict(self, predict_dataloader, ckpt_path=self.trainer.checkpoint_callback.best_model_path)
-    #     else:
-    #         self.trainer.predict(self, predict_dataloader, ckpt_path=best_ckpt)
+    def run_predict(self, best_ckpt=None):
+        predict_dataloader = self.predict_dataloader()
+        self.predict_outputs = DotMap(streetview=DotMap(), satellite=DotMap())
+        if best_ckpt is None:
+            self.trainer.predict(self, predict_dataloader, ckpt_path=self.trainer.checkpoint_callback.best_model_path)
+        else:
+            self.trainer.predict(self, predict_dataloader, ckpt_path=best_ckpt)
 
     def predict_step(self, batch, batch_idx):
         branch = 'streetview' if 'streetview' in batch.keys() else 'satellite'
