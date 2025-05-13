@@ -1,13 +1,13 @@
-exp_name: 'C-B-D_3'
+exp_name: 'DINO-L+Dx2'
 
 system:
-  gpus: 1
-  workers: 4
-  batch_size: 32
+  gpus: 2
+  workers: 1
+  batch_size: 8
   path: '/mnt/fast/nobackup/users/ts00987/vol/research/deep_localisation/challenge/'
   results_path: '/mnt/fast/nobackup/users/ts00987/vol/research/deep_localisation/challenge/results/'
   tune:
-    batch_size: True
+    batch_size: False
 
 
 data:
@@ -18,11 +18,11 @@ data:
 
 model:
   shared_extractor: False
-  backbone: 'convnext'
-  size: 'base'
-  image_size: 384
-  epochs: 500
-  lr: 1e-4
-  drone_weight: 0.66
+  backbone: 'dinov2'
+  size: 'large'
+  image_size: 518
+  epochs: 300
+  lr: 1e-5
+  drone_weight: 1.0
 
 

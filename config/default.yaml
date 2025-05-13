@@ -6,13 +6,13 @@ system:
 
 data:
   val_prop: 0.05
-  use_drone: False
+  use_drone: True
   use_google: False
 
 model:
   backbone: 'convnext'
   size: 'tiny'
   image_size: 224
-  epochs: 100
+  epochs: 10
   lr: 1e-4
-  drone_weight: 0.5
+  drone_weight: 1.0

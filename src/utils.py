@@ -101,10 +101,10 @@ class CMCmAPMetric(Metric):
 
 @rank_zero_only
 def results_dir(cfg):
-    folder = [f.name for f in Path(cfg.system.results_path).iterdir() if f.is_dir()]
-    folder = [int(f) for f in folder if f.isdigit()]
-    folder = max(folder) + 1 if folder else 0
-    results_folder = f'{cfg.system.results_path}{folder}'
+    # folder = [f.name for f in Path(cfg.system.results_path).iterdir() if f.is_dir()]
+    # folder = [int(f) for f in folder if f.isdigit()]
+    # folder = max(folder) + 1 if folder else 0
+    results_folder = f'{cfg.system.results_path}{cfg.exp_name}'
     Path(results_folder).mkdir(parents=True, exist_ok=True)
     Path(f'{results_folder}/ckpts').mkdir(parents=True, exist_ok=True)
     Path(f'{results_folder}/lightning_logs').mkdir(parents=True, exist_ok=True)

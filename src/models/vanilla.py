@@ -123,6 +123,7 @@ class Vanilla(pl.LightningModule):
         self.val_query_ids, self.val_ref_ids = [], []
         self.train_labels, self.val_labels, self.test_labels = [], [], []
         self.test_outputs = DotMap(streetview=DotMap(), satellite=DotMap())
+        self.predict_outputs = DotMap(streetview=DotMap(), satellite=DotMap())
 
     def train_dataloader(self):
         train_dataset = University1652_LMDB(self.cfg, stage='train', data_config=self.model.data_config)
@@ -136,6 +137,10 @@ class Vanilla(pl.LightningModule):
         self.test_dataset = University1652_LMDB(self.cfg, stage='test', data_config=self.model.data_config)
         return DataLoader(self.test_dataset, batch_size=1, num_workers=self.cfg.system.workers, shuffle=False)
     
+    def predict_dataloader(self):
+        predict_dataset = University1652_LMDB(self.cfg, stage='predict', data_config=self.model.data_config)
+        return DataLoader(predict_dataset, batch_size=1, num_workers=self.cfg.system.workers, shuffle=False)
+
     def forward(self, street: torch.Tensor = None, drone: torch.Tensor = None, sat: torch.Tensor = None, 
                 image: torch.Tensor = None, branch: str = 'streetview', stage: str = 'train'):
         if stage == 'predict' or stage == 'test':
@@ -261,18 +266,21 @@ class Vanilla(pl.LightningModule):
         self.log('test_mean', mean_val_1_10, on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
         self.eval_metrics.reset()
         
-    def run_predict(self):
-        predict_dataset = University1652_LMDB(self.cfg, stage='predict', data_config=self.model.data_config)
-        predict_dataloader = DataLoader(predict_dataset, batch_size=1, num_workers=self.cfg.system.workers, shuffle=False)
-        self.predict_outputs = DotMap(streetview=DotMap(), satellite=DotMap())
-        self.trainer.predict(self, predict_dataloader, ckpt_path=self.trainer.checkpoint_callback.best_model_path)
-        
+    # def run_predict(self, best_ckpt=None):
+
+    #     self.predict_outputs = DotMap(streetview=DotMap(), satellite=DotMap())
+    #     if best_ckpt is None:
+    #         self.trainer.predict(self, predict_dataloader, ckpt_path=self.trainer.checkpoint_callback.best_model_path)
+    #     else:
+    #         self.trainer.predict(self, predict_dataloader, ckpt_path=best_ckpt)
+
     def predict_step(self, batch, batch_idx):
         branch = 'streetview' if 'streetview' in batch.keys() else 'satellite'
         image = batch[branch]
         image = image.to(device)
         x_out = self.forward(image=image, branch=branch, stage='test')
         self.predict_outputs[branch][batch['label'][0]] = x_out.cpu().detach().numpy()
+        return 0
 
     def on_predict_epoch_end(self):
         streetview_keys = []

@@ -77,6 +77,10 @@ if cfg.system.gpus == 1 and not cfg.debug:
         cfg.system.batch_size = tuner.scale_batch_size(model, mode='power', init_val=cfg.system.batch_size)
 
 trainer.fit(model)
+
+# save final model weights
+torch.save(model.model.state_dict(), f'{cfg.system.results_path}/final_weights.pth')
+
 trainer.test(model)
 
 ###
