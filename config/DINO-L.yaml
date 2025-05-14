@@ -4,14 +4,14 @@ system:
   gpus: 2
   workers: 1
   batch_size: 8
-  path: '/mnt/fast/nobackup/users/ts00987/vol/research/deep_localisation/challenge/'
-  results_path: '/mnt/fast/nobackup/users/ts00987/vol/research/deep_localisation/challenge/results/'
+  # path: '/mnt/fast/nobackup/users/ts00987/vol/research/deep_localisation/challenge/'
+  # results_path: '/mnt/fast/nobackup/users/ts00987/vol/research/deep_localisation/challenge/results/'
   tune:
     batch_size: False
 
 
 data:
-  root: '/mnt/fast/nobackup/scratch4weeks/ts00987/datasets/University/'
+  # root: '/mnt/fast/nobackup/scratch4weeks/ts00987/datasets/University/'
   query_file: "src/data/query_street_name.txt"
   use_drone: False
   use_google: False
