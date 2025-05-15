@@ -5,7 +5,6 @@ system:
   batch_size: 8
 
 data:
-  val_prop: 0.05
   use_drone: True
   use_google: False
 

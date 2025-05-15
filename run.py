@@ -5,7 +5,7 @@ from lightning.pytorch import loggers as plg
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.tuner.tuning import Tuner
-from src.models.vanilla import Vanilla
+from src.models.vanilla_cheat import Vanilla
 from src.models.ssl import SSL
 from config.cfg import get_cfg_defaults
 from src.utils import results_dir
@@ -60,7 +60,7 @@ trainer = pl.Trainer(max_epochs=cfg.model.epochs, devices=cfg.system.gpus,
                      logger=wandb_logger if not cfg.debug else None,
                      callbacks=[checkpoint_callback, early_stop_callback],
                      check_val_every_n_epoch=2,
-                     overfit_batches=16 if cfg.debug else 0,
+                    #  overfit_batches=16 if cfg.debug else 0,
                      num_sanity_val_steps=0,
                      strategy='auto',
                      default_root_dir=cfg.system.results_path,
@@ -79,13 +79,14 @@ if cfg.system.gpus == 1 and not cfg.debug:
 trainer.fit(model)
 
 # save final model weights
-torch.save(model.model.state_dict(), f'{cfg.system.results_path}/final_weights.pth')
+# torch.save(model.model.state_dict(), f'{cfg.system.results_path}/final_weights.pth')
 
 # In predict anyway
-# trainer.test(model)
+if trainer.local_rank == 0:
+    trainer.test(model)
 
 ###
 # TODO: re-write here to use rank_0 decorate to have more elegant code
-if trainer.local_rank == 0: # Does the rank sort any multiples issue?
-    model.run_predict()
+#  # Does the rank sort any multiples issue?
+    # model.run_predict()
     

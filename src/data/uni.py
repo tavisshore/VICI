@@ -39,10 +39,11 @@ def lmdb_stage_keys(cfg, lmdb, stage):
 
         img_keys = list(image_pairs.keys())
         # TODO: select in ascneding order of list length - waste as little training data as possible
-        if stage == 'val':
-            img_keys = img_keys[int((1-cfg.data.val_prop)*len(img_keys)):]
-        else:
-            img_keys = img_keys[:int((1-cfg.data.val_prop)*len(img_keys))]                
+        # Not needed with validating on test set
+        # if stage == 'val':
+            # img_keys = img_keys[int((1-cfg.data.val_prop)*len(img_keys)):]
+        # else:
+            # img_keys = img_keys[:int((1-cfg.data.val_prop)*len(img_keys))]                
 
         new_dict = DotMap()
         for k in img_keys:
@@ -167,7 +168,7 @@ if __name__ == '__main__':
     cfg.data.use_google = True
     cfg.data.val_prop = 0.05
     
-    for stage in ['val', 'test']:
+    for stage in ['train', 'predict', 'test']:
         data = University1652_LMDB(cfg=cfg, stage=stage, data_config=data_config)
         item = data.__getitem__(random.randint(0, len(data)))
         # print(item)
