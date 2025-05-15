@@ -78,13 +78,11 @@ if cfg.system.gpus == 1 and not cfg.debug:
 
 trainer.fit(model)
 
-# save final model weights
-# torch.save(model.model.state_dict(), f'{cfg.system.results_path}/final_weights.pth')
-
 # In predict anyway
 if trainer.local_rank == 0:
-    trainer.test(model)
-
+    # trainer.test(model)
+    trainer = pl.Trainer(devices=1, default_root_dir=cfg.system.results_path, callbacks=[checkpoint_callback])
+    trainer.test(model, ckpt_path=checkpoint_callback.best_model_path)
 ###
 # TODO: re-write here to use rank_0 decorate to have more elegant code
 #  # Does the rank sort any multiples issue?
