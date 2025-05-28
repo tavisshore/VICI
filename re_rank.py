@@ -194,9 +194,10 @@ def save_reranked_results_to_file(output_file_path, all_reranked_data):
 
 # --- Main Execution ---
 if __name__ == "__main__":
-    query_file_path = "query_street_name.txt"  # Path to your query_street_name.txt file [cite: 2]
-    answer_file_path = "answer.txt"            # Path to your answer.txt file [cite: 1]
-    output_file_path = "reranked_answers.txt"  # Path for the output file
+    answer_root_dir = os.path.join('src', 'results', '3')
+    query_file_path = os.path.join('src','data','query_street_name.txt')
+    answer_file_path = os.path.join(answer_root_dir, 'answer.txt')
+    output_file_path = os.path.join(answer_root_dir, 're_ranked_answer.txt')  # Path for the output file
 
     LLM_MODEL = 'gemini'  # Change to 'ollama', 'gemini', or 'claude' as needed
 
