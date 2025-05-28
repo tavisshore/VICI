@@ -1,22 +1,43 @@
 import random
 from openai import OpenAI
+import os
+import base64
+
+def encode_image(image_path):
+  with open(image_path, "rb") as image_file:
+    return base64.b64encode(image_file.read()).decode('utf-8')
 
 class LLMReRanker:
-    def __init__(self, openai_api_key=None):
+    def __init__(self, mode='ollama', api_key=None, data_root = '/work1/wshah/xzhang/data/university-1652/University-1652/test'):
         """
         Initializes the LLMReRanker.
-        If an openai_api_key is provided, it would set up the OpenAI client.
+        mode: str: The mode of operation. Options are 'ollama', 'gemini', or 'claude'.
+        api_key: str: The API key for the LLM service. Required for 'gemini' and 'claude'.
         """
-        self.client = None
-        if openai_api_key:
-            try:
-                self.client = OpenAI(api_key=openai_api_key)
-                print("OpenAI client initialized successfully.")
-            except Exception as e:
-                print(f"Failed to initialize OpenAI client: {e}")
+        if mode == 'ollama':
+            self.client = OpenAI(
+                base_url = 'http://localhost:11434/v1',
+                api_key='ollama', # required, but unused
+            )
+            self.model = 'llama3'
+        elif mode == 'gemini':
+            self.client = OpenAI(
+                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+                api_key=api_key,
+            )
+            self.model = 'gemini-2.5-flash-preview-05-20'
+        elif mode == 'claude':
+            self.client = OpenAI(
+                base_url="https://api.anthropic.com/v1/",
+                api_key=api_key,
+            )
+            self.model = 'claude-3-7-sonnet-20250219'
+            
         else:
-            print("LLMReRanker initialized without OpenAI API key (simulation mode).")
-            pass
+            raise ValueError("Invalid mode. Choose 'ollama', 'gemini', or 'claude'.")
+
+        self.data_root = data_root
+            
 
     def get_llm_confidence_score(self, query_image_name, retrieved_image_id):
         """
@@ -31,60 +52,91 @@ class LLMReRanker:
         Returns:
             float: A confidence score between 0.0 and 1.0.
         """
-        prompt = f"""
-        Query Image Reference: "{query_image_name}"
-        Retrieved Image Reference: "{retrieved_image_id}"
 
-        Considering the query image reference and the retrieved image reference,
-        how relevant is the retrieved image to the query image?
-        Please provide a confidence score indicating relevance on a scale of 0.0 (not at all relevant)
-        to 1.0 (highly relevant).
+        prompt = """
+                I will give you a pair of images, a ground image and a satellite image. 
+                Your job is to identify if the ground panorama is taken at the location of the satellite image. 
+                You should first give a score between 0 and 1 to indicate how similar is the ground panorama 
+                to the satellite image (for example, 0.8 very similar ground and satellite pairs that they share 
+                similar street layout and the buildings look similar,0.0 not similar at all for the ground and satellite pair). 
+                Moreover, please give the reason for the correspondence, for example, the building is the same in these two views, or the 
+                road direction is the same, etc. If not, please also give the reason why it is not. Please organize your response in a json format with two fields:
+                {
+                    "confidence_score": <score between 0 and 1>,
+                    "reason": "<reason for the correspondence or lack thereof>"
+                }
+                Please do not include any other text outside of the JSON format and the confidence score.
+                """
 
-        Your response should be formatted ONLY as:
-        Confidence Score: <score_value>
-        
-        Example:
-        Confidence Score: 0.85
-        """
 
-        if self.client:
-            try:
-                response = self.client.chat.completions.create(
-                    model="gpt-3.5-turbo",  # Or your preferred model
-                    messages=[
-                        {"role": "system", "content": "You are an AI assistant that evaluates the relevance of a retrieved image to a query image and provides a confidence score."},
-                        {"role": "user", "content": prompt}
+        base64_query = encode_image(os.path.join(self.data_root, 'workshop_query_street', f'{query_image_name}'))
+        base64_satellite = encode_image(os.path.join(self.data_root, 'workshop_gallery_satellite', f'{retrieved_image_id}.jpg'))
+
+        # response = self.client.responses.create(
+        #     model=self.model,
+        #     input=[
+        #         {
+        #             "role": "user",
+        #             "content": [
+        #                 { "type": "input_text", "text": "This is the ground image:" },
+        #                 {
+        #                     "type": "input_image",
+        #                     "image_url": f"data:image/jpeg;base64,{base64_query}",
+        #                 },
+        #                 { "type": "input_text", "text": "This is the satellite image:" },
+        #                 {
+        #                     "type": "input_image",
+        #                     "image_url": f"data:image/jpeg;base64,{base64_satellite}",
+        #                 },
+        #                 { "type": "input_text", "text": f"{prompt}" }
+        #             ],
+        #         }
+        #     ],
+        # )
+
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        { "type": "text", "text": "This is the ground image:" },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{base64_query}"
+                            },
+                        },
+                        { "type": "text", "text": "This is the satellite image:" },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{base64_satellite}"
+                            },
+                        },
+                        { "type": "text", "text": f"{prompt}" }
                     ],
-                    max_tokens=20,
-                    temperature=0.2
-                )
-                llm_response_text = response.choices[0].message.content.strip()
-                # print(f"LLM Raw Response: {llm_response_text}")
-                # Parse the score
-                if "Confidence Score:" in llm_response_text:
-                    try:
-                        score_str = llm_response_text.split("Confidence Score:")[1].strip()
-                        score = float(score_str)
-                        if 0.0 <= score <= 1.0:
-                            return score
-                        else:
-                            print(f"Warning: LLM score {score} out of range for {query_image_name}, {retrieved_image_id}. Defaulting to 0.0.")
-                            return 0.0
-                    except (IndexError, ValueError) as e:
-                        print(f"Error parsing score from LLM response ('{llm_response_text}') for {query_image_name}, {retrieved_image_id}: {e}. Defaulting to 0.0.")
-                        return 0.0
-                else:
-                    print(f"Warning: 'Confidence Score:' not in LLM response ('{llm_response_text}') for {query_image_name}, {retrieved_image_id}. Defaulting to 0.0.")
-                    return 0.0
-            except Exception as e:
-                print(f"Error calling OpenAI API for {query_image_name}, {retrieved_image_id}: {e}. Defaulting to 0.0.")
-                return 0.0
-            # pass # Keep simulation if client part is commented out
+                }
+            ],
+        )
 
-        # Simulate LLM score if self.client is None or API call fails/is commented out
-        simulated_score = round(random.uniform(0.1, 1.0), 2)
-        # print(f"Simulated Confidence Score: {simulated_score}")
-        return simulated_score
+        # llm_response_text = response.choices[0].message.content.strip()
+
+        # if "Confidence Score:" in llm_response_text:
+        #     score_str = llm_response_text.split("Confidence Score:")[1].strip()
+        #     score = float(score_str)
+        #     if 0.0 <= score <= 1.0:
+        #         return score
+        #     else:
+        #         print(f"Warning: LLM score {score} out of range for {query_image_name}, {retrieved_image_id}. Defaulting to 0.0.")
+        #         return 0.0
+        # else:
+        #     print(f"Warning: 'Confidence Score:' not in LLM response ('{llm_response_text}') for {query_image_name}, {retrieved_image_id}. Defaulting to 0.0.")
+        #     return 0.0
+
+        print(response.choices[0])
+        exit(0)
+        return 0.0  # Placeholder return value, replace with actual score extraction logic
 
 
 def read_query_names(query_file_path):
@@ -146,14 +198,10 @@ if __name__ == "__main__":
     answer_file_path = "answer.txt"            # Path to your answer.txt file [cite: 1]
     output_file_path = "reranked_answers.txt"  # Path for the output file
 
-    # --- IMPORTANT ---
-    # To use the actual OpenAI API, you need to provide your API key.
-    # For example:
-    OPENAI_API_KEY = "your_openai_api_key_here"
-    llm_reranker_instance = LLMReRanker(openai_api_key=OPENAI_API_KEY)
-    
-    # For this framework, we'll run in simulation mode (no actual API calls).
-    # llm_reranker_instance = LLMReRanker()
+    LLM_MODEL = 'gemini'  # Change to 'ollama', 'gemini', or 'claude' as needed
+
+    API_KEY = "AIzaSyDLhp4Bj32cs0YYdHzVWmAm_acFFY4Nf-o"
+    llm_reranker_instance = LLMReRanker(mode=LLM_MODEL, api_key=API_KEY)
 
     query_names = read_query_names(query_file_path)
     initial_rankings = read_initial_rankings(answer_file_path)
@@ -161,17 +209,6 @@ if __name__ == "__main__":
     if not query_names or not initial_rankings:
         print("Could not read query or answer files. Exiting.")
     else:
-        # Handle potential mismatch in the number of lines between query and answer files
-        # num_queries = len(query_names)
-        # num_answer_sets = len(initial_rankings)
-
-        # if num_queries != num_answer_sets:
-        #     print(f"Warning: Mismatch in line counts. Queries: {num_queries}, Answers: {num_answer_sets}.")
-        #     print(f"Processing up to the minimum common count: {min(num_queries, num_answer_sets)}.")
-        #     min_count = min(num_queries, num_answer_sets)
-        #     query_names = query_names[:min_count]
-        #     initial_rankings = initial_rankings[:min_count]
-        
         assert len(query_names) == len(initial_rankings), "Mismatch in number of queries and initial rankings."
         
         print(f"Processing {len(query_names)} queries...")
@@ -180,11 +217,6 @@ if __name__ == "__main__":
         for i in range(len(query_names)):
             current_query = query_names[i]
             current_retrieved_set = initial_rankings[i]
-
-            if not current_retrieved_set:
-                print(f"No retrieved images for query '{current_query}'. Skipping re-ranking for this query.")
-                all_reranked_results.append([]) # Add empty list to maintain structure
-                continue
             
             print(f"\nRe-ranking for query: {current_query} ({i+1}/{len(query_names)})")
             print(f"  Initial retrieved IDs: {current_retrieved_set}")
