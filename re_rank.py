@@ -6,6 +6,7 @@ from google.genai import types
 from pydantic import BaseModel
 from enum import Enum
 import json
+import time
 
 
 class Score(Enum):
@@ -79,7 +80,7 @@ class LLMReRanker:
                 I will give you a pair of images, a ground image and a satellite image. 
                 Your job is to identify if the ground image is taken at the location of the satellite image. 
                 You should first summarize the content of the ground image and the satellite image. Pay attention to the salient onjects, such as street, pedestrian ways, buildings, and other features that can help you determine if they are taken at the same location. Do not pay attention to the time of the image, the weather condition, or onjects like cars, people, etc.
-                Then, You need to give a score in a score between 0 to 10 to indicate how similar is the ground image to the satellite image (for example, score 7, 8 or 9 means very similar ground and satellite pairs that they share similar street layout and the buildings look similar, score 1, 2, 3 stand for not similar at all for the ground and satellite pair). Since there is a drastic change between ground view and ssatellite view, do not solely rely on appearance of the object. You should also consider the relative location between the objects (such as the facing of a building with respect to a tree, or the orientation of a road to a building). Finally, summarize all these evidence you can find between the two images and generate a concise reason why these two images are a maching pair or unmatching pair. 
+                Then, You need to give a score in a score between 0 to 10 to indicate how similar is the ground image to the satellite image (for example, score 7, 8 or 9 means very similar ground and satellite pairs that they share similar street layout and the buildings look similar, score 1, 2, 3 stand for not similar at all for the ground and satellite pair). Since there is a drastic change between ground view and ssatellite view, do not solely rely on appearance of the object. You should also consider the relative location between the objects (such as the facing of a building with respect to a tree, or the orientation of a road to a building). Finally, summarize all these evidence you can find between the two images and generate a concise reason why these two images are a maching pair or unmatching pair. If it is a possible matching pair, try to predict the possible location of the ground image in the satellite image at the end of the reason you gave. For example, if the ground image is taken at the bottom left corner of the satellite image, you can say "the ground image is taken at the bottom left corner of the satellite image".
                 """
                 
         json_format = """
@@ -171,7 +172,7 @@ class LLMReRanker:
         LLM_response['query_ground'] = query_image_name
         LLM_response['retrieved_satellite'] = retrieved_image_id
 
-        print(LLM_response)
+        # print(LLM_response)
         return LLM_response  # Placeholder return value, replace with actual score extraction logic
 
 
@@ -214,9 +215,11 @@ def rerank_image_set(query_image_name, retrieved_image_ids, llm_reranker):
         })
         query_reasons.append(LLM_response)
 
-    # Sort by LLM score (descending), then by original rank (ascending) as a tie-breaker
-    # TODO: We can further modify the sorting criteria by weighted LLM score and original rank
-    reranked_images = sorted(scored_images, key=lambda x: (x['llm_score'], -x['original_rank']), reverse=True)
+    # 1 Sort by LLM score (descending), then by original rank (ascending) as a tie-breaker
+    # reranked_images = sorted(scored_images, key=lambda x: (x['llm_score'], -x['original_rank']), reverse=True)
+    
+    # 2 (10 - llm_score) means less LLM score is better. Then add the original rank together. Less summed score means better rank.
+    reranked_images = sorted(scored_images, key=lambda x: (10 - x['llm_score'] + x['original_rank']))
     return reranked_images, query_reasons
 
 def save_reranked_results_to_file(output_file_path, all_reranked_data):
@@ -240,7 +243,7 @@ if __name__ == "__main__":
 
     LLM_MODEL = 'gemini'  # Change to 'ollama', 'gemini', or 'claude' as needed
 
-    API_KEY = "AIzaSyDLhp4Bj32cs0YYdHzVWmAm_acFFY4Nf-o"
+    API_KEY = "YOUR_API_KEY"
     llm_reranker_instance = LLMReRanker(mode=LLM_MODEL, api_key=API_KEY, data_root='../scratch/university-1652/University-1652/test/')
 
     query_names = read_query_names(query_file_path)
@@ -256,15 +259,23 @@ if __name__ == "__main__":
         all_reranked_results = []
         all_reasons = []
         for i in range(len(query_names)):
-            current_query = query_names[i]
-            current_retrieved_set = initial_rankings[i]
-            
-            print(f"\nRe-ranking for query: {current_query} ({i+1}/{len(query_names)})")
-            print(f"  Initial retrieved IDs: {current_retrieved_set}")
-            
-            reranked_set, query_reasons = rerank_image_set(current_query, current_retrieved_set, llm_reranker_instance)
-            all_reranked_results.append(reranked_set)
-            all_reasons.append(query_reasons)
+            while True:
+                try:
+                    time.sleep(60)  # Adding a delay to avoid hitting API rate limits
+                    current_query = query_names[i]
+                    current_retrieved_set = initial_rankings[i]
+                    
+                    print(f"\nRe-ranking for query: {current_query} ({i+1}/{len(query_names)})")
+                    print(f"  Initial retrieved IDs: {current_retrieved_set}")
+                    
+                    reranked_set, query_reasons = rerank_image_set(current_query, current_retrieved_set, llm_reranker_instance)
+                    all_reranked_results.append(reranked_set)
+                    all_reasons.append(query_reasons)
+                    break  # Exit the retry loop if successful
+                except Exception as e:
+                    print(f"Error during re-ranking for query '{current_query}': {e}")
+                    print("Retrying after a short delay...")
+                    time.sleep(10)
             
             # print(f"  Re-ranked IDs: {[img['id'] for img in reranked_set]}")
             # print(f"  Scores (LLM): {[f'{img['llm_score']:.2f}' for img in reranked_set]}")
@@ -273,11 +284,11 @@ if __name__ == "__main__":
             save_reranked_results_to_file(output_file_path, all_reranked_results)
 
             # Optional: Print details of the first re-ranked set for inspection
-            if all_reranked_results and all_reranked_results[0]:
-                print("\n--- Details of the first re-ranked set ---")
-                print(f"Query: {query_names[0]}")
-                for item in all_reranked_results[0]:
-                    print(f"  ID: {item['id']}, LLM Score: {item['llm_score']:.2f}, Original Rank: {item['original_rank']}")
+            # if all_reranked_results and all_reranked_results[0]:
+            #     print("\n--- Details of the first re-ranked set ---")
+            #     print(f"Query: {query_names[0]}")
+            #     for item in all_reranked_results[0]:
+            #         print(f"  ID: {item['id']}, LLM Score: {item['llm_score']:.2f}, Original Rank: {item['original_rank']}")
                     
         with open(os.path.join(answer_root_dir, 'reasons.json'), 'w') as f:
             json.dump(all_reasons, f, indent=4)

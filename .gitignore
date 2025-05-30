@@ -10,6 +10,8 @@ src/results/*
 __pycache__/
 *.py[cod]
 *$py.class
+myjob
+*.out
 
 # C extensions
 *.so
