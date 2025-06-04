@@ -251,12 +251,12 @@ if __name__ == "__main__":
     for q in tqdm(query_names, total=len(query_names)):
         success = False
         attempts = 0
+
+        base64_image = open(os.path.join('/scratch/datasets/University/test/', 'workshop_query_street', f'{q}'), 'rb')
+        image_bytes = base64_image.read()
         
         while not success and attempts < 5:
-            base64_image = open(os.path.join('/scratch/datasets/University/test/', 'workshop_query_street', f'{q}'), 'rb')
-            image_bytes = base64_image.read()
             query_response = llm_reranker_instance.get_llm_confidence_score(image_bytes)
-
             query_response = [x.lower() for x in query_response]
             query_response = query_response[0].split('\n')
             query_response = [f'{x} ' for x in query_response]
@@ -264,11 +264,19 @@ if __name__ == "__main__":
             if len(query_response) == 29:
                 success = True
             else:
-                print(f'retry')
+                print(f'retry {attempts}')
                 attempts += 1
 
-        query_response.insert(0, q.split('.')[0])
-        write_list('query.txt', query_response)
+        if success:
+            query_response.insert(0, q.split('.')[0])
+            write_list('query.txt', query_response)
+
+
+
+
+
+
+
 
 
     ref_names = list(Path('/scratch/datasets/University/test/workshop_gallery_satellite').glob('*.jpeg'))
@@ -277,3 +285,26 @@ if __name__ == "__main__":
     for x in existing:
         if x in ref_names:
             ref_names.remove(x)
+
+    for q in tqdm(ref_names, total=len(ref_names)):
+        success = False
+        attempts = 0
+
+        base64_image = open(os.path.join('/scratch/datasets/University/test/', 'workshop_gallery_satellite', f'{q}'), 'rb')
+        image_bytes = base64_image.read()
+        
+        while not success and attempts < 5:
+            query_response = llm_reranker_instance.get_llm_confidence_score(image_bytes)
+            query_response = [x.lower() for x in query_response]
+            query_response = query_response[0].split('\n')
+            query_response = [f'{x} ' for x in query_response]
+
+            if len(query_response) == 29:
+                success = True
+            else:
+                print(f'retry {attempts}')
+                attempts += 1
+
+        if success:
+            query_response.insert(0, q.split('.')[0])
+            write_list('ref.txt', query_response)
