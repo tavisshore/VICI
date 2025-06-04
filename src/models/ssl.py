@@ -94,8 +94,6 @@ class SSL(pl.LightningModule):
         self.cfg = cfg
         self.lr = cfg.model.lr
         self.batch_size = cfg.system.batch_size
-
-        # self.lmdb_dataset = ImageDatabase(path=cfg.data.root) if cfg.data.type == 'lmdb' else None
         
         self.model = FeatureExtractor(cfg)
         self.model.to(device)
