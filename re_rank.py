@@ -41,7 +41,8 @@ def read_existing(fname):
         lines = f.readlines()
         for l in lines:
             val = l.split(' ')[0]
-            queries.append(f'{val}.jpeg')
+            # queries.append(f'{val}.jpeg')
+            queries.append(f'{val}.jpg')
     return queries
 
 
@@ -240,38 +241,36 @@ if __name__ == "__main__":
     llm_reranker_instance = LLMReRanker(mode=LLM_MODEL, api_key=API_KEY, data_root='/scratch/university-1652/University-1652/test/')
 
     # First get the answers for all query and reference images - this will save a lot of querying
-    query_names = read_query_names(query_file_path)
+    # query_names = read_query_names(query_file_path)
 
-    existing = read_existing('query.txt')
-    for x in existing:
-        if x in query_names:
-            query_names.remove(x)
+    # existing = read_existing('query.txt')
+    # for x in existing:
+    #     if x in query_names:
+    #         query_names.remove(x)
 
 
-    for q in tqdm(query_names, total=len(query_names)):
-        success = False
-        attempts = 0
+    # for q in tqdm(query_names, total=len(query_names)):
+    #     success = False
+    #     attempts = 0
 
-        base64_image = open(os.path.join('/scratch/datasets/University/test/', 'workshop_query_street', f'{q}'), 'rb')
-        image_bytes = base64_image.read()
+    #     base64_image = open(os.path.join('/scratch/datasets/University/test/', 'workshop_query_street', f'{q}'), 'rb')
+    #     image_bytes = base64_image.read()
         
-        while not success and attempts < 5:
-            query_response = llm_reranker_instance.get_llm_confidence_score(image_bytes)
-            query_response = [x.lower() for x in query_response]
-            query_response = query_response[0].split('\n')
-            query_response = [f'{x} ' for x in query_response]
+    #     while not success and attempts < 5:
+    #         query_response = llm_reranker_instance.get_llm_confidence_score(image_bytes)
+    #         query_response = [x.lower() for x in query_response]
+    #         query_response = query_response[0].split('\n')
+    #         query_response = [f'{x} ' for x in query_response]
 
-            if len(query_response) == 29:
-                success = True
-            else:
-                print(f'retry {attempts}')
-                attempts += 1
+    #         if len(query_response) == 29:
+    #             success = True
+    #         else:
+    #             print(f'retry {attempts}')
+    #             attempts += 1
 
-        if success:
-            query_response.insert(0, q.split('.')[0])
-            write_list('query.txt', query_response)
-
-
+    #     if success:
+    #         query_response.insert(0, q.split('.')[0])
+    #         write_list('query.txt', query_response)
 
 
 
@@ -279,7 +278,11 @@ if __name__ == "__main__":
 
 
 
-    ref_names = list(Path('/scratch/datasets/University/test/workshop_gallery_satellite').glob('*.jpeg'))
+
+
+    ref_names = list(Path('/scratch/datasets/University/test/workshop_gallery_satellite').glob('*.jpg'))
+
+    ref_names = [f.name for f in ref_names]
 
     existing = read_existing('ref.txt')
     for x in existing:
