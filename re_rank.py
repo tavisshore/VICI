@@ -3,13 +3,13 @@ import os
 import base64
 from pydantic import BaseModel
 from enum import Enum
-import json
-import time
 from tqdm import tqdm
 from pathlib import Path
 from google import genai
 from google.genai import types
-import csv
+
+
+
 class Score(Enum):
     ZERO = '0'
     ONE = '1'
