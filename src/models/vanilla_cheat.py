@@ -123,6 +123,7 @@ class Vanilla(pl.LightningModule):
         self.val_query_ids, self.val_ref_ids = [], []
         self.train_labels, self.val_labels, self.test_labels = [], [], []
         self.test_outputs = DotMap(streetview=DotMap(), satellite=DotMap())
+        self.val_outputs = DotMap(streetview=DotMap(), satellite=DotMap())
         self.predict_outputs = DotMap(streetview=DotMap(), satellite=DotMap())
 
     def train_dataloader(self):
@@ -130,17 +131,13 @@ class Vanilla(pl.LightningModule):
         return DataLoader(train_dataset, batch_size=self.batch_size, num_workers=self.cfg.system.workers, shuffle=True)
 
     def val_dataloader(self):
-        val_dataset = University1652_LMDB(self.cfg, stage='val', data_config=self.model.data_config)
+        val_dataset = University1652_LMDB(self.cfg, stage='test', data_config=self.model.data_config)
         return DataLoader(val_dataset, batch_size=1, num_workers=self.cfg.system.workers, shuffle=False)
     
     def test_dataloader(self):
-        self.test_dataset = University1652_LMDB(self.cfg, stage='test', data_config=self.model.data_config)
+        self.test_dataset = University1652_LMDB(self.cfg, stage='predict', data_config=self.model.data_config)
         return DataLoader(self.test_dataset, batch_size=1, num_workers=self.cfg.system.workers, shuffle=False)
     
-    def predict_dataloader(self):
-        predict_dataset = University1652_LMDB(self.cfg, stage='predict', data_config=self.model.data_config)
-        return DataLoader(predict_dataset, batch_size=1, num_workers=self.cfg.system.workers, shuffle=False)
-
     def forward(self, street: torch.Tensor = None, drone: torch.Tensor = None, sat: torch.Tensor = None, 
                 image: torch.Tensor = None, branch: str = 'streetview', stage: str = 'train'):
         if stage == 'predict' or stage == 'test':
@@ -219,13 +216,21 @@ class Vanilla(pl.LightningModule):
         self.train_labels = []
         return avg_loss
     
-    def validation_step(self, batch, batch_idx):
-        street_out, _, sat_out = self.forward(street=batch['streetview'], sat=batch['satellite'], stage='val')
-        street_out, sat_out = street_out.detach(), sat_out.detach()
-        
-        self.eval_metrics.update(street_out, int(batch['label'][0]), 'streetview')
-        self.eval_metrics.update(sat_out, int(batch['label'][0]), 'satellite')
-        
+    def validation_step(self, batch, batch_idx):        
+        branch = 'streetview' if 'streetview' in batch.keys() else 'satellite'
+        image = batch[branch]
+        image = image.to(device)
+        x_out = self.forward(image=image, branch=branch, stage='test')
+        self.val_outputs[branch][batch['label'][0]] = x_out.cpu().detach().numpy()
+
+        # print(batch['label'])
+        # breakpoint()
+
+        if branch == 'streetview':
+            self.eval_metrics.update(x_out, int(batch['label'][0]), 'streetview')
+        else:
+            self.eval_metrics.update(x_out, int(batch['label'][0]), 'satellite')
+
         # I cannot log the mse error now since the val is not one on one. So return 0 for place holder.
         return 0
     
@@ -250,49 +255,21 @@ class Vanilla(pl.LightningModule):
         image = batch[branch]
         image = image.to(device)
         x_out = self.forward(image=image, branch=branch, stage='test')
-
-        if branch == 'streetview':
-            self.test_metrics.update(x_out, int(batch['label'][0]), 'streetview')
-        else:
-            self.test_metrics.update(x_out, int(batch['label'][0]), 'satellite')
+        self.test_outputs[branch][batch['label'][0]] = x_out.cpu().detach().numpy()
 
     def on_test_epoch_end(self):
-        metrics = self.test_metrics.compute()
-
-        for i in [1, 5, 10]: 
-            self.log(f'test_{i}', metrics[i-1] * 100.0, on_epoch=True, prog_bar=False, logger=True, sync_dist=True) 
-
-        mean_val_1_10 = torch.stack([self.trainer.callback_metrics[f'test_{i}'] for i in [1, 5, 10]]).mean()
-        self.log('test_mean', mean_val_1_10, on_epoch=True, prog_bar=False, logger=True, sync_dist=True)
-        self.eval_metrics.reset()
-        
-    def run_predict(self, best_ckpt=None):
-        predict_dataloader = self.predict_dataloader()
-        self.predict_outputs = DotMap(streetview=DotMap(), satellite=DotMap())
-        if best_ckpt is None:
-            self.trainer.predict(self, predict_dataloader, ckpt_path=self.trainer.checkpoint_callback.best_model_path)
-        else:
-            self.trainer.predict(self, predict_dataloader, ckpt_path=best_ckpt)
-
-    def predict_step(self, batch, batch_idx):
-        branch = 'streetview' if 'streetview' in batch.keys() else 'satellite'
-        image = batch[branch]
-        image = image.to(device)
-        x_out = self.forward(image=image, branch=branch, stage='test')
-        self.predict_outputs[branch][batch['label'][0]] = x_out.cpu().detach().numpy()
-        return 0
-
-    def on_predict_epoch_end(self):
         streetview_keys = []
         with open(self.cfg.data.query_file, "r") as f:
             for line in f.readlines():
                 line = line.strip()
                 streetview_keys.append(line.split('.')[0])
-        satellite_keys = list(self.predict_outputs['satellite'].keys())
-        streetview_embeddings = [self.predict_outputs['streetview'][x] for x in streetview_keys]
-        satellite_embeddings = [self.predict_outputs['satellite'][x] for x in satellite_keys]
-        print(f'# Query Street Images: {len(streetview_embeddings)}')
-        print(f'# Gallery Satellite Images: {len(satellite_embeddings)}')
+        satellite_keys = list(self.test_outputs['satellite'].keys())
+        streetview_embeddings = [self.test_outputs['streetview'][x] for x in streetview_keys]
+        satellite_embeddings = [self.test_outputs['satellite'][x] for x in satellite_keys]
+
+        print(f'\n# Query Street Images: {len(streetview_embeddings)} of {streetview_embeddings[0].shape}')
+        print(f'# Gallery Satellite Images: {len(satellite_embeddings)} of {satellite_embeddings[0].shape}\n')
+
         streetview = np.concatenate(streetview_embeddings)
         satellite = np.concatenate(satellite_embeddings)
 

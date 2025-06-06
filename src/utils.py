@@ -62,7 +62,6 @@ class CMCmAPMetric(Metric):
             raise NotImplementedError(f'{branch} is not implemented')
     
     def compute(self):
-        
         query_features = dim_zero_cat(self.query_features)  # [Nq, D]
         query_ids = dim_zero_cat(self.query_ids)  # [Nq]
         gallery_features = dim_zero_cat(self.gallery_features)  # [Ng, D]
@@ -102,18 +101,16 @@ class CMCmAPMetric(Metric):
 
 @rank_zero_only
 def results_dir(cfg):
-    folder = [f.name for f in Path(cfg.system.results_path).iterdir() if f.is_dir()]
-    folder = [int(f) for f in folder if f.isdigit()]
-    folder = max(folder) + 1 if folder else 0
-    results_folder = f'{cfg.system.results_path}{folder}'
+    # folder = [f.name for f in Path(cfg.system.results_path).iterdir() if f.is_dir()]
+    # folder = [int(f) for f in folder if f.isdigit()]
+    # folder = max(folder) + 1 if folder else 0
+    results_folder = f'{cfg.system.results_path}{cfg.exp_name}'
     Path(results_folder).mkdir(parents=True, exist_ok=True)
     Path(f'{results_folder}/ckpts').mkdir(parents=True, exist_ok=True)
     Path(f'{results_folder}/lightning_logs').mkdir(parents=True, exist_ok=True)
     return results_folder
 
 def recall_accuracy(query, db, labels):
-    db_length = len(db)
-
     tree = KDTree(db)
     ks = [1, 5, 10]    
     metrics = {k: 0 for k in ks}
@@ -129,6 +126,7 @@ def recall_accuracy(query, db, labels):
 
     for gt_ind, ret_inds in enumerate(retrievals):
         indices = ground_truths[labels[gt_ind]]
+        # print(f'{labels[gt_ind]}: {indices} - {ret_inds}')
         for k in filter(lambda k: len(np.intersect1d(ret_inds[:k], indices)) > 0, ks):
             metrics[k] += 1
 
@@ -152,17 +150,6 @@ def get_backbone(cfg):
                 384: 'timm/convnextv2_base.fcmae_ft_in22k_in1k_384'
             }
         },  
-        'dinov2': {
-            'tiny': {
-                518: 'timm/vit_small_patch14_reg4_dinov2.lvd142m',
-            },
-            'base': {
-                518: 'timm/vit_base_patch14_reg4_dinov2.lvd142m',
-             },
-             'large': {
-                518: 'timm/vit_large_patch14_dinov2.lvd142m',
-             },
-        },
         'vit': {
             'tiny': {
                 224: 'timm/vit_tiny_patch16_224.augreg_in21k_ft_in1k',
@@ -175,6 +162,17 @@ def get_backbone(cfg):
                 224: 'timm/vit_base_patch16_224.augreg_in21k_ft_in1k',
                 384: 'timm/vit_base_patch16_384.augreg_in21k_ft_in1k'
             }   
+        },
+        'dinov2': {
+            'tiny': {
+                518: 'timm/vit_small_patch14_reg4_dinov2.lvd142m',
+            },
+            'base': {
+                518: 'timm/vit_base_patch14_reg4_dinov2.lvd142m',
+             },
+             'large': {
+                518: 'timm/vit_large_patch14_dinov2.lvd142m',
+             },
         },
         'eva02':{
             'base':{
@@ -193,10 +191,16 @@ def get_backbone(cfg):
     assert cfg.model.size in backbones[cfg.model.backbone], f"Size {cfg.model.size} not supported for {cfg.model.backbone}"
     assert cfg.model.image_size in backbones[cfg.model.backbone][cfg.model.size], f"Image size {cfg.model.image_size} not supported for {cfg.model.backbone} {cfg.model.size}"
 
-    network = backbones[cfg.model.backbone][cfg.model.size]
-    if cfg.model.backbone != 'dinov2':
-        network = network[cfg.model.image_size]
+    model = timm.create_model(backbones[cfg.model.backbone][cfg.model.size][cfg.model.image_size], pretrained=True, num_classes=0)
 
-    return timm.create_model(backbones[cfg.model.backbone][cfg.model.size][cfg.model.image_size], pretrained=True, num_classes=0)
+    # ensure all parameters are trainable
+    for param in model.parameters():
+        param.requires_grad = True
+    # set the model to train mode
+    model.train()
+
+    return model
 
     
+if __name__ == '__main__':
+    model = timm.create_model('timm/eva02_base_patch16_clip_224.merged2b_s8b_b131k', pretrained=True, num_classes=0)

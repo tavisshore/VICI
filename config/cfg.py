@@ -18,25 +18,24 @@ _C.system.tune = CN()
 _C.system.tune.lr = False
 _C.system.tune.batch_size = False
 _C.system.results_path = _C.system.path + '/results/'
-_C.system.scheduler = 'plateau' # 'step' or 'plateau' or 'cos'
+_C.system.scheduler = 'cos'
 _C.system.batch_size = 8
 
 # This is a dumb paramerter. 
 # But I need to disable wandb logger in this cluser to avoid freezing
-_C.system.amd_cluster = True
+_C.system.amd_cluster = False
 
 
 _C.data = CN()
-_C.data.root = f'/home/{getpass.getuser()}/datasets/challenge/lmdb/'
+_C.data.root = f'/scratch/datasets/University/'
 _C.data.query_file = "src/data/query_street_name.txt"
-_C.data.type = 'lmdb' # 'lmdb', 'folder'
+_C.data.type = 'lmdb' # 'lmdb', 'folder',
 _C.data.sample_equal = True
 _C.data.include_drone = False
 _C.data.drone_image_rate = 0.3 # If include_drone is True, this is the rate of replacing satellite with drone image
 
-
 _C.model = CN()
-_C.model.epochs = 200
+_C.model.epochs = 500
 _C.model.lr = 1e-4
 
 _C.model.backbone = 'convnext' # 'convnext', 'dinov2
@@ -44,6 +43,7 @@ _C.model.size = 'tiny'
 _C.model.image_size = 384
 _C.model.shared_extractor = False
 _C.model.miner = False
+_C.model.drone_weight = 1.0
 
 
 _C.model.head = CN()

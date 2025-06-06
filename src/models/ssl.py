@@ -6,6 +6,7 @@ import lightning.pytorch as pl
 
 import timm 
 from pytorch_metric_learning import losses
+
 from pytorch_metric_learning.miners import MultiSimilarityMiner, HDCMiner
 from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR, CosineAnnealingLR, ExponentialLR
 
@@ -15,7 +16,7 @@ from dotmap import DotMap
 from copy import deepcopy
 from src.data.u1652 import University1652_CVGL
 from src.utils import recall_accuracy, get_backbone, CMCmAPMetric
-from src.data.database import ImageDatabase
+# from src.data.database import ImageDatabase
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -93,8 +94,6 @@ class SSL(pl.LightningModule):
         self.cfg = cfg
         self.lr = cfg.model.lr
         self.batch_size = cfg.system.batch_size
-
-        self.lmdb_dataset = ImageDatabase(path=cfg.data.root)
         
         self.model = FeatureExtractor(cfg)
         self.model.to(device)
