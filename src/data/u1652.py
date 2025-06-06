@@ -8,6 +8,8 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 from PIL import Image
 from dotmap import DotMap
+import random
+import os
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -163,7 +165,24 @@ class University1652_CVGL(Dataset):
                 sample.index = torch.randint(0, len(self.image_pairs[sample.pair]), (1,)).item()
             imgs = self.image_pairs[sample.pair][sample.index]
             streetview = Image.open(imgs.streetview).convert('RGB')
-            satellite = Image.open(imgs.satellite).convert('RGB')
+
+            # Randomly replace satellite with drone image
+            replace_satellite = random.random() < self.cfg.data.drone_image_rate
+            if self.cfg.data.include_drone and replace_satellite:
+                # I hardcoded the path to drone images, assuming they are in the same directory structure as satellite images.
+                # This is a bit hacky, but it works for the dataset structure.
+                # Please change this accordingly for LMDB.
+                drone_path = str(imgs.satellite).replace('satellite', 'drone').split('/')[:-1]
+                drone_path = '/'.join(drone_path)
+                # TODO: Here we may consider only using first 20 or 30 drone images. They are usually the high altitude ones.
+                drone_img_list = [x for x in Path(drone_path).iterdir() if x.is_file()]
+                random_drone_img = random.choice(drone_img_list)
+                satellite = Image.open(random_drone_img).convert('RGB')
+                
+            else:
+                satellite = Image.open(imgs.satellite).convert('RGB')
+
+
             streetview = self.transform(streetview)
             satellite = self.transform(satellite)
             return {'streetview': streetview, 'satellite': satellite, 'label': sample.pair}
@@ -192,13 +211,18 @@ if __name__ == '__main__':
     cfg.data = CN()
     cfg.data.root = '/work1/wshah/xzhang/data/university-1652/University-1652'
     cfg.data.sample_equal = True
-    data = University1652_CVGL(cfg=cfg, stage='val')
-    item = data.__getitem__(0)
-    
-    print('len: ', len(data))
+    data = University1652_CVGL(cfg=cfg, stage='train', data_config={'input_size': 224})
 
-    try:
-        print(item['streetview'].shape)
-    except:
-        print(item['satellite'].shape)
-    print(type(item['name']))
+    i = 0
+    while i < 10:
+        i += 1
+        item = data.__getitem__(i)
+        
+        print('len: ', len(data))
+
+        try:
+            print(item['streetview'].shape)
+        except:
+            print(item['satellite'].shape)
+
+        # print(type(item['name']))

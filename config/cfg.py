@@ -31,7 +31,8 @@ _C.data.root = f'/home/{getpass.getuser()}/datasets/challenge/lmdb/'
 _C.data.query_file = "src/data/query_street_name.txt"
 _C.data.type = 'lmdb' # 'lmdb', 'folder'
 _C.data.sample_equal = True
-
+_C.data.include_drone = False
+_C.data.drone_image_rate = 0.3 # If include_drone is True, this is the rate of replacing satellite with drone image
 
 
 _C.model = CN()

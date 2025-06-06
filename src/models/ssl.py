@@ -281,7 +281,7 @@ class SSL(pl.LightningModule):
             sch = CosineAnnealingLR(optimizer=opt, T_max=self.cfg.model.epochs)
             return [opt], [{"scheduler": sch, "interval": "epoch"}]
         elif self.cfg.system.scheduler == 'exp':
-            sch = ExponentialLR(optimizer=opt, gamma = 0.97)
+            sch = ExponentialLR(optimizer=opt, gamma = 0.9)
             return [opt], [{"scheduler": sch, "interval": "epoch"}]
         else:
             return opt
