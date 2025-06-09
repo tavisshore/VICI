@@ -9,23 +9,29 @@ import json
 import time
 
 
-class Score(Enum):
-    ZERO = '0'
-    ONE = '1'
-    TWO = '2'
-    THREE = '3'
-    FOUR = '4'
-    FIVE = '5'
-    SIX = '6'
-    SEVEN = '7'
-    EIGHT = '8'
-    NINE = '9'
-    TEN = '10'
+# class Score(Enum):
+#     ZERO = '0'
+#     ONE = '1'
+#     TWO = '2'
+#     THREE = '3'
+#     FOUR = '4'
+#     FIVE = '5'
+#     SIX = '6'
+#     SEVEN = '7'
+#     EIGHT = '8'
+#     NINE = '9'
+#     TEN = '10'
+
+# class ResponseFormat(BaseModel):
+#     confidence_score: Score
+#     summary_ground_image: str
+#     summary_satellite_image: str
+#     reason: str
 
 class ResponseFormat(BaseModel):
-    confidence_score: Score
+    ranking: list[int]
     summary_ground_image: str
-    summary_satellite_image: str
+    summary_satellite_images: list[str]
     reason: str
 
 def encode_image(image_path):
@@ -64,23 +70,27 @@ class LLMReRanker:
         self.data_root = data_root
             
 
-    def get_llm_confidence_score(self, query_image_name, retrieved_image_id):
+    def get_llm_confidence_score(self, query_image_name, retrieved_image_ids):
         """
         Gets a confidence score from the LLM for a query-retrieved image pair.
 
         Args:
             query_image_name (str): The file name of the query image.
-            retrieved_image_id (str): The ID of the retrieved image.
+            retrieved_image_ids (list[str]): The IDs of the retrieved images.
 
         Returns:
             float: A confidence score between 0.0 and 1.0.
         """
 
         prompt = """
-                I will give you a pair of images, a ground image and a satellite image. 
-                Your job is to identify if the ground image is taken at the location of the satellite image. 
-                You should first summarize the content of the ground image and the satellite image. Pay attention to the salient onjects, such as street, pedestrian ways, buildings, and other features that can help you determine if they are taken at the same location. Do not pay attention to the time of the image, the weather condition, or onjects like cars, people, etc.
-                Then, You need to give a score in a score between 0 to 10 to indicate how similar is the ground image to the satellite image (for example, score 7, 8 or 9 means very similar ground and satellite pairs that they share similar street layout and the buildings look similar, score 1, 2, 3 stand for not similar at all for the ground and satellite pair). Since there is a drastic change between ground view and ssatellite view, do not solely rely on appearance of the object. You should also consider the relative location between the objects (such as the facing of a building with respect to a tree, or the orientation of a road to a building). Finally, summarize all these evidence you can find between the two images and generate a concise reason why these two images are a maching pair or unmatching pair. If it is a possible matching pair, try to predict the possible location of the ground image in the satellite image at the end of the reason you gave. For example, if the ground image is taken at the bottom left corner of the satellite image, you can say "the ground image is taken at the bottom left corner of the satellite image".
+                I will give you a ground image and 10 satellite images (the first satellite image is satellite 1 and the last one is satellite 10). 
+                Your job is to identify which satellite is the location where the ground image was taken.
+                You should first summarize the content of the ground image. Pay attention to the salient objects, such as streets, pedestrian ways, buildings, and other features that can help you determine if they are taken at the same location.
+                Try to make the summary concise but informative, focusing on the objects and features that can help you determine the location of the ground image.
+                Do not pay attention to the time of the image, the weather conditions, or objects like cars, people, etc.
+                Then you should take a look at each satellite image, summarize in a similar way as the ground image and find the corresponding objects as you summarized between the satellite image and the given ground image. 
+                Finally, you should rank these 10 satellite images from the most likely location to the least likely location. For example, your output should be a list of integers [1, 4, 7, 5, 8, 3, 9, 2, 6, 10], which means satellite 1 is the most probable one, and satellite image 10 is the least probable location.
+                Lastly, for the most probable location (in the previous example is satellite image 1), give a concise reason for choosing it as the most likely location, giving the corresponding objects you find and identifying where exactly might be the ground camera location on this satellite image ( for example, you can say on the top right corner of the satellite image probably is the location where the ground image is taken at).
                 """
                 
         json_format = """
@@ -88,10 +98,10 @@ class LLMReRanker:
                 
                 ```
                 {
-                    "confidence_score": <score between 0 and 10>,
+                    "ranking": a list of integers, 1-10, representing the ranking of the satellite images from most likely to least likely location,
                     "Summary of ground iamge": "<summary of the ground image>",
                     "Summary of satellite image": "<summary of the satellite image>",
-                    "reason": "<reason for the correspondence or lack thereof>"
+                    "reason": "<reason why choosing the most likely satellite image as the location of the ground image>"
                 }
                 ```
                 Please only fill the fields in the above JSON template and do not include any other extra text inside and outside of the above JSON template.
@@ -101,78 +111,84 @@ class LLMReRanker:
         # print(retrieved_image_id)
 
         if 'gemini' not in self.model:
-            # For Ollama and Claude, we use the OpenAI client to create a response
-            base64_query = encode_image(os.path.join(self.data_root, 'workshop_query_street', f'{query_image_name}'))
+            # # For Ollama and Claude, we use the OpenAI client to create a response
+            # base64_query = encode_image(os.path.join(self.data_root, 'workshop_query_street', f'{query_image_name}'))
             
-            base64_satellite = encode_image(os.path.join(self.data_root, 'workshop_gallery_satellite', f'{retrieved_image_id}.jpg'))
+            # base64_satellite = encode_image(os.path.join(self.data_root, 'workshop_gallery_satellite', f'{retrieved_image_id}.jpg'))
             
-            response = self.client.responses.create(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            { "type": "text", "text": f"{prompt}+{json_format}" },
-                            { "type": "text", "text": "This is the ground image:" },
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{base64_query}"
-                                },
-                            },
-                            { "type": "text", "text": "This is the satellite image:" },
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{base64_satellite}"
-                                },
-                            }
-                        ],
-                    }
-                ],
-            )
+            # response = self.client.responses.create(
+            #     model=self.model,
+            #     messages=[
+            #         {
+            #             "role": "user",
+            #             "content": [
+            #                 { "type": "text", "text": f"{prompt}+{json_format}" },
+            #                 { "type": "text", "text": "This is the ground image:" },
+            #                 {
+            #                     "type": "image_url",
+            #                     "image_url": {
+            #                         "url": f"data:image/jpeg;base64,{base64_query}"
+            #                     },
+            #                 },
+            #                 { "type": "text", "text": "This is the satellite image:" },
+            #                 {
+            #                     "type": "image_url",
+            #                     "image_url": {
+            #                         "url": f"data:image/jpeg;base64,{base64_satellite}"
+            #                     },
+            #                 }
+            #             ],
+            #         }
+            #     ],
+            # )
             
-            LLM_response = json.loads(response.choices[0].message.content)
-            
+            # LLM_response = json.loads(response.choices[0].message.content)
+
+            # For the other mdoels, we need to think how to get the output for top 10 images
+            pass
+
         else:
             # For Gemini, we use the genai client to generate content
-            f_q = open(os.path.join(self.data_root, 'workshop_query_street', f'{query_image_name}'), 'rb')
-            f_s = open(os.path.join(self.data_root, 'workshop_gallery_satellite', f'{retrieved_image_id}.jpg'), 'rb')
-            
-            query_bytes = f_q.read()
-            satellite_bytes = f_s.read()
-            
+            with open(os.path.join(self.data_root, 'workshop_query_street', f'{query_image_name}'), 'rb') as f_q:
+                query_bytes = f_q.read()
+
+            requst_content = [
+                f'{prompt}', 
+                'This is the query ground image:',
+                types.Part.from_bytes(
+                    data=query_bytes, 
+                    mime_type='image/jpeg'
+                    )
+                ]
+
+            for index, retrieved_image_id in enumerate(retrieved_image_ids):
+                with open(os.path.join(self.data_root, 'workshop_gallery_satellite', f'{retrieved_image_id}.jpg'), 'rb') as f_s:
+                    satellite_bytes = f_s.read()
+
+                    requst_content.extend([
+                        f'This is the satellite image {index + 1}:',
+                        types.Part.from_bytes(
+                            data=satellite_bytes,
+                            mime_type='image/jpeg'
+                        )
+                    ])
+
             response = self.client.models.generate_content(
                 model=self.model,
-                contents=[f'{prompt}',
-                          'This is the ground image:',
-                          types.Part.from_bytes(
-                              data=query_bytes,
-                              mime_type='image/jpeg',
-                            ),
-                          'This is the satellite image:',
-                          types.Part.from_bytes(
-                              data=satellite_bytes,
-                              mime_type='image/jpeg',
-                            ),
-                          ],
+                contents=requst_content,
                 config=types.GenerateContentConfig(
                     temperature=0.0, # want to be more deterministic
-                    thinking_config=types.ThinkingConfig(thinking_budget=512),
+                    thinking_config=types.ThinkingConfig(thinking_budget=2048),
                     response_mime_type='application/json',
                     response_schema=ResponseFormat,
                 )
             )
             
-            f_q.close()
-            f_s.close()
-            
             LLM_response = json.loads(response.text)
             
         LLM_response['query_ground'] = query_image_name
-        LLM_response['retrieved_satellite'] = retrieved_image_id
+        LLM_response['retrieved_images'] = {retrieved_image_id:(index + 1) for index, retrieved_image_id in enumerate(retrieved_image_ids)}
 
-        # print(LLM_response)
         return LLM_response  # Placeholder return value, replace with actual score extraction logic
 
 
@@ -206,20 +222,24 @@ def rerank_image_set(query_image_name, retrieved_image_ids, llm_reranker):
     """
     scored_images = []
     query_reasons = []
-    for rank, image_id in enumerate(retrieved_image_ids):
-        LLM_response = llm_reranker.get_llm_confidence_score(query_image_name, image_id)
+
+    LLM_response = llm_reranker.get_llm_confidence_score(query_image_name, retrieved_image_ids)
+    
+    for image_id, original_rank in LLM_response['retrieved_images'].items():
         scored_images.append({
             'id': image_id,
-            'original_rank': rank + 1,
-            'llm_score': int(LLM_response['confidence_score'])
+            'original_rank': original_rank,
+            'llm_score': LLM_response['ranking'].index(original_rank) + 1,  # Convert to 1-based index
         })
-        query_reasons.append(LLM_response)
+
+    query_reasons.append(LLM_response)
 
     # 1 Sort by LLM score (descending), then by original rank (ascending) as a tie-breaker
     # reranked_images = sorted(scored_images, key=lambda x: (x['llm_score'], -x['original_rank']), reverse=True)
     
     # 2 (10 - llm_score) means less LLM score is better. Then add the original rank together. Less summed score means better rank.
-    reranked_images = sorted(scored_images, key=lambda x: (10 - x['llm_score'] + x['original_rank']))
+    reranked_images = sorted(scored_images, key=lambda x: (x['llm_score'] + x['original_rank'], x['original_rank']))
+    # print(reranked_images)
     return reranked_images, query_reasons
 
 def save_reranked_results_to_file(output_file_path, all_reranked_data):
@@ -236,14 +256,14 @@ def save_reranked_results_to_file(output_file_path, all_reranked_data):
 
 # --- Main Execution ---
 if __name__ == "__main__":
-    answer_root_dir = os.path.join('src', 'results', '3')
+    answer_root_dir = os.path.join('src', 'results', '0')
     query_file_path = os.path.join('src','data','query_street_name.txt')
     answer_file_path = os.path.join(answer_root_dir, 'answer.txt')
     output_file_path = os.path.join(answer_root_dir, 're_ranked_answer.txt')  # Path for the output file
 
     LLM_MODEL = 'gemini'  # Change to 'ollama', 'gemini', or 'claude' as needed
 
-    API_KEY = "YOUR_API_KEY"
+    API_KEY = "AIzaSyDLhp4Bj32cs0YYdHzVWmAm_acFFY4Nf-o"
     llm_reranker_instance = LLMReRanker(mode=LLM_MODEL, api_key=API_KEY, data_root='../scratch/university-1652/University-1652/test/')
 
     query_names = read_query_names(query_file_path)
@@ -259,9 +279,9 @@ if __name__ == "__main__":
         all_reranked_results = []
         all_reasons = []
         for i in range(len(query_names)):
+        # for i in range(10):
             while True:
                 try:
-                    time.sleep(60)  # Adding a delay to avoid hitting API rate limits
                     current_query = query_names[i]
                     current_retrieved_set = initial_rankings[i]
                     
@@ -271,11 +291,10 @@ if __name__ == "__main__":
                     reranked_set, query_reasons = rerank_image_set(current_query, current_retrieved_set, llm_reranker_instance)
                     all_reranked_results.append(reranked_set)
                     all_reasons.append(query_reasons)
-                    break  # Exit the retry loop if successful
+                    break
                 except Exception as e:
-                    print(f"Error during re-ranking for query '{current_query}': {e}")
-                    print("Retrying after a short delay...")
-                    time.sleep(10)
+                    print(f"Error processing query '{current_query}': {e}")
+                    time.sleep(30)  # Wait before retrying
             
             # print(f"  Re-ranked IDs: {[img['id'] for img in reranked_set]}")
             # print(f"  Scores (LLM): {[f'{img['llm_score']:.2f}' for img in reranked_set]}")
