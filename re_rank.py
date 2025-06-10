@@ -165,13 +165,13 @@ class LLMReRanker:
                 with open(os.path.join(self.data_root, 'workshop_gallery_satellite', f'{retrieved_image_id}.jpg'), 'rb') as f_s:
                     satellite_bytes = f_s.read()
 
-                    requst_content.extend([
-                        f'This is the satellite image {index + 1}:',
-                        types.Part.from_bytes(
-                            data=satellite_bytes,
-                            mime_type='image/jpeg'
-                        )
-                    ])
+                requst_content.extend([
+                    f'This is the satellite image {index + 1}:',
+                    types.Part.from_bytes(
+                        data=satellite_bytes,
+                        mime_type='image/jpeg'
+                    )
+                ])
 
             response = self.client.models.generate_content(
                 model=self.model,
@@ -238,9 +238,13 @@ def rerank_image_set(query_image_name, retrieved_image_ids, llm_reranker):
     # reranked_images = sorted(scored_images, key=lambda x: (x['llm_score'], -x['original_rank']), reverse=True)
     
     # 2 (10 - llm_score) means less LLM score is better. Then add the original rank together. Less summed score means better rank.
-    reranked_images = sorted(scored_images, key=lambda x: (x['llm_score'] + x['original_rank'], x['original_rank']))
+    
+    weighted_reranked_images = sorted(scored_images, key=lambda x: (x['llm_score'] + x['original_rank'], x['original_rank']))
+    
+    LLM_reranked_images = sorted(scored_images, key=lambda x: (x['llm_score'], x['original_rank']))
+    
     # print(reranked_images)
-    return reranked_images, query_reasons
+    return weighted_reranked_images, LLM_reranked_images, query_reasons
 
 def save_reranked_results_to_file(output_file_path, all_reranked_data):
     """Saves the re-ranked image IDs to the specified output file."""
@@ -259,7 +263,9 @@ if __name__ == "__main__":
     answer_root_dir = os.path.join('src', 'results', '0')
     query_file_path = os.path.join('src','data','query_street_name.txt')
     answer_file_path = os.path.join(answer_root_dir, 'answer.txt')
-    output_file_path = os.path.join(answer_root_dir, 're_ranked_answer.txt')  # Path for the output file
+    weighted_output_file_path = os.path.join(answer_root_dir, 'weighted_re_ranked_answer.txt')  # Path for the weighted output file
+    
+    LLM_output_file_path = os.path.join(answer_root_dir, 'LLM_re_ranked_answer.txt')  # Path for the pure LLM output file
 
     LLM_MODEL = 'gemini'  # Change to 'ollama', 'gemini', or 'claude' as needed
 
@@ -276,7 +282,8 @@ if __name__ == "__main__":
         
         print(f"Processing {len(query_names)} queries...")
 
-        all_reranked_results = []
+        all_weighted_reranked_results = []
+        all_LLM_reranked_results = []
         all_reasons = []
         for i in range(len(query_names)):
         # for i in range(10):
@@ -288,8 +295,9 @@ if __name__ == "__main__":
                     print(f"\nRe-ranking for query: {current_query} ({i+1}/{len(query_names)})")
                     print(f"  Initial retrieved IDs: {current_retrieved_set}")
                     
-                    reranked_set, query_reasons = rerank_image_set(current_query, current_retrieved_set, llm_reranker_instance)
-                    all_reranked_results.append(reranked_set)
+                    weighted_reranked_set, LLM_reranked_set, query_reasons = rerank_image_set(current_query, current_retrieved_set, llm_reranker_instance)
+                    all_weighted_reranked_results.append(weighted_reranked_set)
+                    all_LLM_reranked_results.append(LLM_reranked_set)
                     all_reasons.append(query_reasons)
                     break
                 except Exception as e:
@@ -299,8 +307,11 @@ if __name__ == "__main__":
             # print(f"  Re-ranked IDs: {[img['id'] for img in reranked_set]}")
             # print(f"  Scores (LLM): {[f'{img['llm_score']:.2f}' for img in reranked_set]}")
 
-        if all_reranked_results:
-            save_reranked_results_to_file(output_file_path, all_reranked_results)
+        if all_weighted_reranked_results:
+            save_reranked_results_to_file(weighted_output_file_path, all_weighted_reranked_results)
+            
+        if all_LLM_reranked_results:
+            save_reranked_results_to_file(LLM_output_file_path, all_LLM_reranked_results)
 
             # Optional: Print details of the first re-ranked set for inspection
             # if all_reranked_results and all_reranked_results[0]:
