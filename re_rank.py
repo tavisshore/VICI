@@ -270,7 +270,7 @@ if __name__ == "__main__":
     LLM_MODEL = 'gemini'  # Change to 'ollama', 'gemini', or 'claude' as needed
 
     API_KEY = "AIzaSyDLhp4Bj32cs0YYdHzVWmAm_acFFY4Nf-o"
-    llm_reranker_instance = LLMReRanker(mode=LLM_MODEL, api_key=API_KEY, data_root='../scratch/university-1652/University-1652/test/')
+    llm_reranker_instance = LLMReRanker(mode=LLM_MODEL, api_key=API_KEY, data_root='../data/university-1652/University-1652/test/')
 
     query_names = read_query_names(query_file_path)
     initial_rankings = read_initial_rankings(answer_file_path)
@@ -303,22 +303,12 @@ if __name__ == "__main__":
                 except Exception as e:
                     print(f"Error processing query '{current_query}': {e}")
                     time.sleep(30)  # Wait before retrying
-            
-            # print(f"  Re-ranked IDs: {[img['id'] for img in reranked_set]}")
-            # print(f"  Scores (LLM): {[f'{img['llm_score']:.2f}' for img in reranked_set]}")
 
         if all_weighted_reranked_results:
             save_reranked_results_to_file(weighted_output_file_path, all_weighted_reranked_results)
             
         if all_LLM_reranked_results:
             save_reranked_results_to_file(LLM_output_file_path, all_LLM_reranked_results)
-
-            # Optional: Print details of the first re-ranked set for inspection
-            # if all_reranked_results and all_reranked_results[0]:
-            #     print("\n--- Details of the first re-ranked set ---")
-            #     print(f"Query: {query_names[0]}")
-            #     for item in all_reranked_results[0]:
-            #         print(f"  ID: {item['id']}, LLM Score: {item['llm_score']:.2f}, Original Rank: {item['original_rank']}")
                     
         with open(os.path.join(answer_root_dir, 'reasons.json'), 'w') as f:
             json.dump(all_reasons, f, indent=4)
