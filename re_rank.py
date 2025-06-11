@@ -299,8 +299,8 @@ if __name__ == "__main__":
         all_reasons = []
         
         skipped_id = []
-        # for i in range(len(query_names)):
-        for i in range(446,449):
+        for i in range(len(query_names)):
+        # for i in range(446,449):
             exception_counter = 0
             while True:
                 try:
