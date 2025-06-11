@@ -86,11 +86,12 @@ class LLMReRanker:
                 I will give you a ground image and 10 satellite images (the first satellite image is satellite 1 and the last one is satellite 10). 
                 Your job is to identify which satellite is the location where the ground image was taken.
                 You should first summarize the content of the ground image. Pay attention to the salient objects, such as streets, pedestrian ways, buildings, and other features that can help you determine if they are taken at the same location.
-                Try to make the summary concise but informative, focusing on the objects and features that can help you determine the location of the ground image.
+                Try to make the summary concise and informative.
                 Do not pay attention to the time of the image, the weather conditions, or objects like cars, people, etc.
-                Then you should take a look at each satellite image, summarize in a similar way as the ground image and find the corresponding objects as you summarized between the satellite image and the given ground image. 
-                Finally, you should rank these 10 satellite images from the most likely location to the least likely location. For example, your output should be a list of integers [1, 4, 7, 5, 8, 3, 9, 2, 6, 10], which means satellite 1 is the most probable one, and satellite image 10 is the least probable location.
+                Then you should take a look at each satellite image, summarize in a similar way as the ground image and find the corresponding objects between the satellite image and the given ground image. 
+                Finally, you should rank these 10 satellite images from the most likely location to the least likely location. Your output should be a list of integers [1, 4, 7, 5, 8, 3, 9, 2, 6, 10], which means satellite 1 is the most probable one, and satellite image 10 is the least probable location.
                 Lastly, for the most probable location (in the previous example is satellite image 1), give a concise reason for choosing it as the most likely location, giving the corresponding objects you find and identifying where exactly might be the ground camera location on this satellite image ( for example, you can say on the top right corner of the satellite image probably is the location where the ground image is taken at).
+                Make your response concise.
                 """
                 
         json_format = """
@@ -178,7 +179,7 @@ class LLMReRanker:
                 contents=requst_content,
                 config=types.GenerateContentConfig(
                     temperature=0.0, # want to be more deterministic
-                    thinking_config=types.ThinkingConfig(thinking_budget=2048),
+                    thinking_config=types.ThinkingConfig(thinking_budget=1024),
                     response_mime_type='application/json',
                     response_schema=ResponseFormat,
                 )
@@ -270,7 +271,7 @@ if __name__ == "__main__":
     LLM_MODEL = 'gemini'  # Change to 'ollama', 'gemini', or 'claude' as needed
 
     API_KEY = "AIzaSyDLhp4Bj32cs0YYdHzVWmAm_acFFY4Nf-o"
-    llm_reranker_instance = LLMReRanker(mode=LLM_MODEL, api_key=API_KEY, data_root='../data/university-1652/University-1652/test/')
+    llm_reranker_instance = LLMReRanker(mode=LLM_MODEL, api_key=API_KEY, data_root='../scratch/university-1652/University-1652/test/')
 
     query_names = read_query_names(query_file_path)
     initial_rankings = read_initial_rankings(answer_file_path)
@@ -286,7 +287,7 @@ if __name__ == "__main__":
         all_LLM_reranked_results = []
         all_reasons = []
         for i in range(len(query_names)):
-        # for i in range(10):
+        # for i in range(30,40):
             while True:
                 try:
                     current_query = query_names[i]
@@ -302,7 +303,7 @@ if __name__ == "__main__":
                     break
                 except Exception as e:
                     print(f"Error processing query '{current_query}': {e}")
-                    time.sleep(30)  # Wait before retrying
+                    time.sleep(10)  # Wait before retrying
 
         if all_weighted_reranked_results:
             save_reranked_results_to_file(weighted_output_file_path, all_weighted_reranked_results)
