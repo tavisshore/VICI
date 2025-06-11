@@ -217,23 +217,34 @@ def read_initial_rankings(answer_file_path):
         print(f"Error: Answer file '{answer_file_path}' not found.")
         return []
 
-def rerank_image_set(query_image_name, retrieved_image_ids, llm_reranker):
+def rerank_image_set(query_image_name, retrieved_image_ids, llm_reranker, keep_original_rank = False):
     """
     Re-ranks a single set of retrieved images for a query using LLM scores.
     """
     scored_images = []
     query_reasons = []
 
-    LLM_response = llm_reranker.get_llm_confidence_score(query_image_name, retrieved_image_ids)
-    
-    for image_id, original_rank in LLM_response['retrieved_images'].items():
-        scored_images.append({
-            'id': image_id,
-            'original_rank': original_rank,
-            'llm_score': LLM_response['ranking'].index(original_rank) + 1,  # Convert to 1-based index
-        })
-
-    query_reasons.append(LLM_response)
+    if not keep_original_rank:
+        LLM_response = llm_reranker.get_llm_confidence_score(query_image_name, retrieved_image_ids)
+        
+        for image_id, original_rank in LLM_response['retrieved_images'].items():
+            scored_images.append({
+                'id': image_id,
+                'original_rank': original_rank,
+                'llm_score': LLM_response['ranking'].index(original_rank) + 1,  # Convert to 1-based index
+            })
+            
+        query_reasons.append(LLM_response)
+    else:
+        for rank, image_id in enumerate(retrieved_image_ids):
+            scored_images.append({
+                'id': image_id,
+                'original_rank': rank + 1,
+                'llm_score': rank + 1,  # Convert to 1-based index
+            })
+            
+        query_reasons.append({'query_ground': query_image_name, 
+                              'reason':'Skipped'})
 
     # 1 Sort by LLM score (descending), then by original rank (ascending) as a tie-breaker
     # reranked_images = sorted(scored_images, key=lambda x: (x['llm_score'], -x['original_rank']), reverse=True)
@@ -286,8 +297,11 @@ if __name__ == "__main__":
         all_weighted_reranked_results = []
         all_LLM_reranked_results = []
         all_reasons = []
-        for i in range(len(query_names)):
-        # for i in range(30,40):
+        
+        skipped_id = []
+        # for i in range(len(query_names)):
+        for i in range(446,449):
+            exception_counter = 0
             while True:
                 try:
                     current_query = query_names[i]
@@ -301,9 +315,23 @@ if __name__ == "__main__":
                     all_LLM_reranked_results.append(LLM_reranked_set)
                     all_reasons.append(query_reasons)
                     break
+                
                 except Exception as e:
+                    exception_counter += 1
                     print(f"Error processing query '{current_query}': {e}")
-                    time.sleep(10)  # Wait before retrying
+                    time.sleep(5)  # Wait before retrying
+                    
+                    # If larger than 3 times exception just abort this query
+                    if exception_counter > 3:
+                        
+                        skipped_id.append(current_query)
+                        
+                        weighted_reranked_set, LLM_reranked_set, query_reasons = rerank_image_set(current_query, current_retrieved_set, llm_reranker_instance, keep_original_rank=True)
+                        
+                        all_weighted_reranked_results.append(weighted_reranked_set)
+                        all_LLM_reranked_results.append(LLM_reranked_set)
+                        all_reasons.append(query_reasons)
+                        break
 
         if all_weighted_reranked_results:
             save_reranked_results_to_file(weighted_output_file_path, all_weighted_reranked_results)
@@ -313,3 +341,6 @@ if __name__ == "__main__":
                     
         with open(os.path.join(answer_root_dir, 'reasons.json'), 'w') as f:
             json.dump(all_reasons, f, indent=4)
+        
+        print('number of skipped images: ', len(skipped_id))
+        print('Skipped images: ', skipped_id)
