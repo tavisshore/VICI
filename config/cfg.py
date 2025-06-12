@@ -9,6 +9,7 @@ _C.exp_name = 'exp_name'
 _C.debug = False
 _C.config = 'default.yaml'
 _C.data_config = CN()
+_C.model_wrapper = 'vanilla'  # 'vanilla', 'ssl'
 
 _C.system = CN()
 _C.system.gpus = 1
