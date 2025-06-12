@@ -1,4 +1,5 @@
-exp_name: 'dinov2_large_4gpu_100ep'
+exp_name: 'test'
+model_wrapper: 'ssl'
 
 system:
   gpus: 4
@@ -12,6 +13,8 @@ system:
 data:
   root: '/work1/wshah/xzhang/data/university-1652/University-1652'
   query_file: "src/data/query_street_name.txt"
+  include_drone: True
+  drone_image_rate: 0.3
 
 model:
   shared_extractor: False
