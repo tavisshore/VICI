@@ -281,7 +281,7 @@ if __name__ == "__main__":
 
     LLM_MODEL = 'gemini'  # Change to 'ollama', 'gemini', or 'claude' as needed
 
-    API_KEY = "AIzaSyDLhp4Bj32cs0YYdHzVWmAm_acFFY4Nf-o"
+    API_KEY = "Gemini API Key"  # Replace with your actual API key for Gemini
     llm_reranker_instance = LLMReRanker(mode=LLM_MODEL, api_key=API_KEY, data_root='../scratch/university-1652/University-1652/test/')
 
     query_names = read_query_names(query_file_path)
