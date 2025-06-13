@@ -7,7 +7,7 @@ from tqdm import tqdm
 from pathlib import Path
 from google import genai
 from google.genai import types
-
+from PIL import Image
 
 
 class Score(Enum):
@@ -49,6 +49,9 @@ def read_existing(fname):
 
 def encode_image(image_path):
   with open(image_path, "rb") as image_file:
+    img = image_file.read()
+    print(type(img))
+    breakpoint()
     return base64.b64encode(image_file.read()).decode('utf-8')
 
 class LLMReRanker:
@@ -84,38 +87,9 @@ class LLMReRanker:
             
     def get_llm_confidence_score(self, base64_image):
         prompt = """
-                Answer the following questions by selecting a single option from the list, outputting only the answer and an appended ' - ', 
-                Ensure all questions are answered:
-
-                What is the predominant environment in the image? (urban/suburban/rural/highway/industrial/natural/dense forestation/water body/mixed),
-                What type of road layout is visible in the image? (grid pattern/winding roads/roundabout/dead-end streets/highway/none/mixed patterns),
-                What kind of distinct road features are present in the image? (none/simple intersections/complex junctions/overpasses/roundabouts/traffic circles),
-                What types of buildings are most common in the image? (residential houses/apartment buildings/commercial buildings/industrial facilities/public buildings/mixed/no buildings/other),
-                What is the condition of the vegetation in the image? (None/dense forests/parklands/sparse vegetation/agricultural fields/barren land/ornamental gardens),
-                What distinctive features are present in the image? (None / Natural Landmarks / Historical Buildings / Modern Structures / Sporting Facilities / Water Bodies / Parks / Urban Art / Monuments / Industrial Facilities / Other),
-                What is the architecture style of the buildings in the image ? (None/traditional/modern/industrial/mixed/historical),
-                What type of transportation features can be seen in the image? (None/train tracks/airports/ports/tram lines/bus stations),
-                What kind of large, open spaces are there in the picture? (None/fields/empty lots/forests/car parks/urban squares/golf course/public garden/playgrounds/sports field),
-                What is the overall layout of the area observed in the image? (organized/disorganized/mixed/regular pattern/irregular pattern/none/chaotic),
-                What are the unique patterns in roads or buildings in the image? (none/linear patterns/radial patterns/grid patterns/irregular patterns/circular patterns),
-                What is the predominant color of the roofs in the image? (red/brown/grey/white/green/other/none/multi-colored),
-                What is the predominant color of the roads in the image? (black/grey/red/yellow/other/none/multi-colored),
-                What other notable color features are present in the image? (green areas/water bodies/colored buildings/sports fields/none/colorful gardens),
-                What type of main road is visible in the image? (none/single-lane road/multi-lane road/highway/expressway),
-                What road markings are present in the image? (None / Zebra crossings / Chevrons / White lines / Yellow lines / Double yellow lines / Arrows / Stop lines / Crosswalks / Bicycle lanes / Bus lanes / Hatched markings / Box junctions / School crossings / Speed limit markings / Other),
-                What are the predominant colors of the road markings in the image? (White / Yellow / Red / Blue / Green / None / Other / Multi-colored),
-                Are there any of the following road structures visible in the image? (None / Bridge / Underpass / Overpass / Tunnel / Flyover / Pedestrian crossing bridge / Roundabout / Highway interchange / Railway crossing / Other),
-                How would you describe the orientation of the roads in the image? (Straight highway / Single road / Multiple parallel roads / Multiple roads converging / Multiple roads diverging / Intersection / Roundabout / Serpentine or winding road / T-junction / Crossroads / Forked road / Overpass/underpass systems / Cul-de-sac / One-way street / Pedestrian-only path / Bicycle lane / None / Other),
-                What are the predominant types of parked vehicles in the image? (Cars / Trucks / Bicycles / Motorcycles / Public Transport / None),
-                What is the directional layout of the road junction in the image? (none/left turn only / right turn only / both left and right turns / four-way intersection / roundabout / multiple direction options / complex multi-way junction / other),
-                What is the width of the road? (None/narrow/medium/wide/multiple lanes/variable widths),
-                Are there any traffic lights present along the road? (yes/no),
-                Are there any billboard signs on the road indicating directions or destinations? (Yes / No),
-                Is there a rest area or service station visible in the image? (yes/no),
-                What type of service facility is visible in the image? (None/Petrol station / Supermarket / Restaurant / Hotel),
-                Are any sports courts visible? (None/basketball/tennis/football),
-                Does the road have a hard shoulder or emergency lane? (yes/no),
-                Is there a pedestrian area like a sidewalk or footpath alongside the road? (yes/no)
+                I will give you a ground image and 9 satellite images (the first satellite image is satellite 1 and the last one is satellite 10). Your job is to identify which satellite is the location where the ground image was taken. You should first summarize the content of the ground image. Pay attention to the salient objects, such as streets, pedestrian ways, buildings, and other features that can help you determine if they are taken at the same location. Do not pay attention to the time of the image, the weather conditions, or objects like cars, people, etc.
+                Then you should take a look at each satellite image and find the corresponding objects as you summarized between the satellite image and the given ground image. Finally, you should rank these 10 satellite images from the most likely location to the least likely location. For example, your output should be like: 1>4>7>5>8>3>9>2>6>10, which means satellite 1 is the most probable one, and satellite image 10 is the least probable location.
+                Lastly, for the most probable location (in the example above is satellite 1), summarize a concise reason for choosing it as the most likely location, giving the corresponding objects you find and identifying where exactly might be the ground camera location on this satellite image ( for example, you can say on the top right corner of the satellite image probably is the location where the ground image is taken at).
                 """
 
         # Removed
@@ -229,6 +203,10 @@ def save_reranked_results_to_file(output_file_path, all_reranked_data):
     except IOError:
         print(f"Error: Could not write to output file '{output_file_path}'.")
 
+
+
+
+
 # --- Main Execution ---
 if __name__ == "__main__":
     answer_root_dir = os.path.join('results')
@@ -243,16 +221,31 @@ if __name__ == "__main__":
     # First get the answers for all query and reference images - this will save a lot of querying
     query_names = read_query_names(query_file_path)
 
-    existing = read_existing('query.txt')
+    # existing = read_existing('query.txt')
+
+    existing = []
+    with open('query.txt', 'r') as f:
+        lines = f.readlines()
+        for l in lines:
+            val = l.split(' ')[0]
+            existing.append(f'{val}.jpeg')
+
     for x in existing:
         if x in query_names:
             query_names.remove(x)
 
-
-
+    i = 0
     for q in tqdm(query_names, total=len(query_names)):
         success = False
         attempts = 0
+
+        img = Image.open(os.path.join('/scratch/datasets/University/test/', 'workshop_query_street', f'{q}'))
+        img = img.convert('RGB')
+        img.save(f'{i}_street.jpg')
+        i += 1
+        if i > 5:
+            breakpoint()
+
 
         base64_image = open(os.path.join('/scratch/datasets/University/test/', 'workshop_query_street', f'{q}'), 'rb')
         image_bytes = base64_image.read()
@@ -281,34 +274,99 @@ if __name__ == "__main__":
 
 
 
-    # ref_names = list(Path('/scratch/datasets/University/test/workshop_gallery_satellite').glob('*.jpg'))
 
-    # ref_names = [f.name for f in ref_names]
 
-    # existing = read_existing('ref.txt')
-    # for x in existing:
-    #     if x in ref_names:
-    #         ref_names.remove(x)
 
-    # for q in tqdm(ref_names, total=len(ref_names)):
-    #     success = False
-    #     attempts = 0
 
-    #     base64_image = open(os.path.join('/scratch/datasets/University/test/', 'workshop_gallery_satellite', f'{q}'), 'rb')
-    #     image_bytes = base64_image.read()
+
+    ref_names = list(Path('/scratch/datasets/University/test/workshop_gallery_satellite').glob('*.jpg'))
+
+    ref_names = [f.name for f in ref_names]
+
+    existing = []
+    with open('ref.txt', 'r') as f:
+        lines = f.readlines()
+        for l in lines:
+            val = l.split(' ')[0]
+            existing.append(f'{val}.jpg')
+
+    for x in existing:
+        if x in ref_names:
+            ref_names.remove(x)
+    
+    i = 0
+
+    for q in tqdm(ref_names, total=len(ref_names)):
+        success = False
+        attempts = 0
+
+        img = Image.open(os.path.join('/scratch/datasets/University/test/', 'workshop_gallery_satellite', f'{q}'))
+        img = img.convert('RGB')
+        img.save(f'{i}.jpg')
+
+        base64_image = open(os.path.join('/scratch/datasets/University/test/', 'workshop_gallery_satellite', f'{q}'), 'rb')
+        image_bytes = base64_image.read()
         
-    #     while not success and attempts < 5:
-    #         query_response = llm_reranker_instance.get_llm_confidence_score(image_bytes)
-    #         query_response = [x.lower() for x in query_response]
-    #         query_response = query_response[0].split('\n')
-    #         query_response = [f'{x} ' for x in query_response]
+        while not success and attempts < 5:
+            query_response = llm_reranker_instance.get_llm_confidence_score(image_bytes)
+            query_response = [x.lower() for x in query_response]
+            query_response = query_response[0].split('\n')
+            query_response = [f'{x} ' for x in query_response]
 
-    #         if len(query_response) == 29:
-    #             success = True
-    #         else:
-    #             print(f'retry {attempts}')
-    #             attempts += 1
+            if len(query_response) == 29:
+                success = True
+            else:
+                print(f'retry {attempts}')
+                attempts += 1
 
-    #     if success:
-    #         query_response.insert(0, q.split('.')[0])
-    #         write_list('ref.txt', query_response)
+        if success:
+            query_response.insert(0, q.split('.')[0])
+            write_list('ref.txt', query_response)
+
+
+
+
+# What is the predominant environment in the image? (urban/suburban/rural/highway/industrial/natural/dense forestation/water body/mixed),
+# What type of road layout is visible in the image? (grid pattern/winding roads/roundabout/dead-end streets/highway/none/mixed patterns),
+# What kind of distinct road features are present in the image? (none/simple intersections/complex junctions/overpasses/roundabouts/traffic circles),
+# What types of buildings are most common in the image? (residential houses/apartment buildings/commercial buildings/industrial facilities/public buildings/mixed/no buildings/other),
+# What is the condition of the vegetation in the image? (None/dense forests/parklands/sparse vegetation/agricultural fields/barren land/ornamental gardens),
+# What distinctive features are present in the image? (None / Natural Landmarks / Historical Buildings / Modern Structures / Sporting Facilities / Water Bodies / Parks / Urban Art / Monuments / Industrial Facilities / Other),
+# What is the architecture style of the buildings in the image ? (None/traditional/modern/industrial/mixed/historical),
+# What type of transportation features can be seen in the image? (None/train tracks/airports/ports/tram lines/bus stations),
+# What kind of large, open spaces are there in the picture? (None/fields/empty lots/forests/car parks/urban squares/golf course/public garden/playgrounds/sports field),
+# What is the overall layout of the area observed in the image? (organized/disorganized/mixed/regular pattern/irregular pattern/none/chaotic),
+# What are the unique patterns in roads or buildings in the image? (none/linear patterns/radial patterns/grid patterns/irregular patterns/circular patterns),
+# What is the predominant color of the roofs in the image? (red/brown/grey/white/green/other/none/multi-colored),
+# What is the predominant color of the roads in the image? (black/grey/red/yellow/other/none/multi-colored),
+# What other notable color features are present in the image? (green areas/water bodies/colored buildings/sports fields/none/colorful gardens),
+# What type of main road is visible in the image? (none/single-lane road/multi-lane road/highway/expressway),
+# What road markings are present in the image? (None / Zebra crossings / Chevrons / White lines / Yellow lines / Double yellow lines / Arrows / Stop lines / Crosswalks / Bicycle lanes / Bus lanes / Hatched markings / Box junctions / School crossings / Speed limit markings / Other),
+# What are the predominant colors of the road markings in the image? (White / Yellow / Red / Blue / Green / None / Other / Multi-colored),
+# Are there any of the following road structures visible in the image? (None / Bridge / Underpass / Overpass / Tunnel / Flyover / Pedestrian crossing bridge / Roundabout / Highway interchange / Railway crossing / Other),
+# How would you describe the orientation of the roads in the image? (Straight highway / Single road / Multiple parallel roads / Multiple roads converging / Multiple roads diverging / Intersection / Roundabout / Serpentine or winding road / T-junction / Crossroads / Forked road / Overpass/underpass systems / Cul-de-sac / One-way street / Pedestrian-only path / Bicycle lane / None / Other),
+# What are the predominant types of parked vehicles in the image? (Cars / Trucks / Bicycles / Motorcycles / Public Transport / None),
+# What is the directional layout of the road junction in the image? (none/left turn only / right turn only / both left and right turns / four-way intersection / roundabout / multiple direction options / complex multi-way junction / other),
+# What is the width of the road? (None/narrow/medium/wide/multiple lanes/variable widths),
+# Are there any traffic lights present along the road? (yes/no),
+# Are there any billboard signs on the road indicating directions or destinations? (Yes / No),
+# Is there a rest area or service station visible in the image? (yes/no),
+# What type of service facility is visible in the image? (None/Petrol station / Supermarket / Restaurant / Hotel),
+# Are any sports courts visible? (None/basketball/tennis/football),
+# Does the road have a hard shoulder or emergency lane? (yes/no),
+# Is there a pedestrian area like a sidewalk or footpath alongside the road? (yes/no)
+
+
+
+
+
+
+
+
+# Here is a satellite image, I'm going to ask questions about the environment - focus on static objects like vegetation, buildings, and roads. ignore dynamic objects like vehicles.
+
+# For each question, return the selected option from the choices.
+
+
+# Is the environment urban, sub-urban, or rural?
+
