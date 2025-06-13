@@ -9,6 +9,7 @@ _C.exp_name = 'exp_name'
 _C.debug = False
 _C.config = 'default.yaml'
 _C.data_config = CN()
+_C.model_wrapper = 'vanilla'  # 'vanilla', 'ssl'
 
 _C.system = CN()
 _C.system.gpus = 1
@@ -31,9 +32,8 @@ _C.data.root = f'/scratch/datasets/University/'
 _C.data.query_file = "src/data/query_street_name.txt"
 _C.data.type = 'lmdb' # 'lmdb', 'folder',
 _C.data.sample_equal = True
-_C.data.use_drone = False
-_C.data.use_google = False
-_C.data.val_prop = 0.05
+_C.data.include_drone = False
+_C.data.drone_image_rate = 0.3 # If include_drone is True, this is the rate of replacing satellite with drone image
 
 _C.model = CN()
 _C.model.epochs = 500
