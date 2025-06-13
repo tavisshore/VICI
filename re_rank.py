@@ -40,12 +40,15 @@ def encode_image(image_path):
 
 class LLMReRanker:
     def __init__(self, mode='ollama', api_key=None, data_root = '/work1/wshah/xzhang/data/university-1652/University-1652/test'):
+
         """
         Initializes the LLMReRanker.
         mode: str: The mode of operation. Options are 'ollama', 'gemini', or 'claude'.
         api_key: str: The API key for the LLM service. Required for 'gemini' and 'claude'.
         data_root: str: The root directory for the dataset.
         """
+
+        self.mode = mode
         if mode == 'ollama':
             self.client = OpenAI(
                 base_url = 'http://localhost:11434/v1',
@@ -55,6 +58,7 @@ class LLMReRanker:
         elif mode == 'gemini':
             self.client = genai.Client(
                 api_key=api_key,
+
             )
             self.model = 'gemini-2.5-flash-preview-05-20'
         elif mode == 'claude':
@@ -193,6 +197,7 @@ class LLMReRanker:
         return LLM_response  # Placeholder return value, replace with actual score extraction logic
 
 
+
 def read_query_names(query_file_path):
     """Reads query image names from the specified file."""
     try:
@@ -218,6 +223,7 @@ def read_initial_rankings(answer_file_path):
         return []
 
 def rerank_image_set(query_image_name, retrieved_image_ids, llm_reranker, keep_original_rank = False):
+
     """
     Re-ranks a single set of retrieved images for a query using LLM scores.
     """
@@ -258,6 +264,7 @@ def rerank_image_set(query_image_name, retrieved_image_ids, llm_reranker, keep_o
     # print(reranked_images)
     return weighted_reranked_images, LLM_reranked_images, query_reasons
 
+
 def save_reranked_results_to_file(output_file_path, all_reranked_data):
     """Saves the re-ranked image IDs to the specified output file."""
     try:
@@ -270,6 +277,9 @@ def save_reranked_results_to_file(output_file_path, all_reranked_data):
     except IOError:
         print(f"Error: Could not write to output file '{output_file_path}'.")
 
+        
+        
+        
 # --- Main Execution ---
 if __name__ == "__main__":
     answer_root_dir = os.path.join('src', 'results', '0')
