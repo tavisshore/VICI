@@ -77,15 +77,12 @@ conda env create -n ENV -f requirements.yaml && conda activate ENV
 [![Project Page](http://img.shields.io/badge/Project-Page-green)](https://tavisshore.co.uk/peng/)
 [![GitHub](https://img.shields.io/badge/GitHub-PEnG-%23121011.svg?logo=github&logoColor=white)](https://github.com/tavisshore/peng)
 
-### 🕺 [GeoDTR+: Toward generic cross-view geolocalization via geometric disentanglement](https://github.com/tavisshore/PEnG)
+### ⛰️ [GeoDTR+: Toward generic cross-view geolocalization via geometric disentanglement](https://github.com/tavisshore/PEnG)
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
 [![arxiv](https://img.shields.io/badge/cs.LG-2308.09624-b31b1b?style=flat&logo=arxiv&logoColor=red)](https://arxiv.org/pdf/2308.09624)
 [![Conference](http://img.shields.io/badge/TPAMI-2023-4b44ce.svg)]()
 [![Project Page](http://img.shields.io/badge/Project-Page-green)](https://zxh009123.github.io/publication/zhang-geodtr-2023/)
 [![GitHub](https://img.shields.io/badge/GitLab-GeoDTR+-%23121011.svg?logo=gitlab)](https://gitlab.com/vail-uvm/geodtr_plus)
-
-
-
 
 ## ⭐ Star History
  <a href="https://star-history.com/#tavisshore/VICI&Date" align="middle">
