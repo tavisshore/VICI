@@ -69,5 +69,17 @@ conda env create -n ENV -f requirements.yaml && conda activate ENV
 ### 🐍 Stage 2 - VLM Re-ranking
 
 
+## 📗 Related Works
+
+
+
+## ⭐ Star History
+ <a href="https://star-history.com/#tavisshore/VICI&Date" align="middle">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=tavisshore/VICI&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=tavisshore/VICI&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=tavisshore/VICI&type=Date" />
+ </picture>
+</a>
 
 
