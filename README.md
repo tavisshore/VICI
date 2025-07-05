@@ -11,7 +11,7 @@
 </p>
 <p align="middle">
  <a href="https://www.wshahaigroup.com/">Vermont Artificial Intelligence Laboratory (VaiL)</a>
- <a href="https://www.surrey.ac.uk/centre-vision-speech-signal-processing">Centre for Vision, Speech, and Signal Processing (CVSSP)</a>
+ <a href="https://www.surrey.ac.uk/centre-vision-speech-signal-processing">Centre for Vision, Speech, and Signal Processing (CVSSP)</a> <br>
  <a href="https://www.ucf.edu/">University of Central Florida</a>
  <a href="https://locusrobotics.com/">Locus Robotics</a>
 </p>
