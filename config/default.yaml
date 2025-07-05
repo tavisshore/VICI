@@ -1,17 +1,26 @@
-exp_name: 'ConvNext-T'
+exp_name: 'EXPERIMENT'
+model_wrapper: 'ssl'
+
 system:
-  gpus: 1
-  workers: 4
+  gpus: 4
+  workers: 0
   batch_size: 8
+  path: 'PROJECT_ROOT'
+  results_path: 'WHERE_TO_SAVE_RESULTS'
+  amd_cluster: True
+  scheduler: 'exp'
 
 data:
-  use_drone: True
-  use_google: False
+  root: 'DATA_ROOT'
+  query_file: "src/data/query_street_name.txt"
+  include_drone: True
+  drone_image_rate: 0.3
 
 model:
-  backbone: 'convnext'
-  size: 'tiny'
-  image_size: 224
-  epochs: 5
-  lr: 1e-4
-  drone_weight: 1.0
+  shared_extractor: False
+  backbone: 'dinov2'
+  size: 'large'
+  image_size: 518
+  epochs: 100
+  lr: 1e-5
+  miner: False
