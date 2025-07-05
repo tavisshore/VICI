@@ -20,4 +20,23 @@
 
 </div>
 
+## 📓 Description 
+
+## 🧬 Feature Extractors
+
+## 🧰 Vision-Language Models
+
+## 📊 Evaluation
+### 🐍 Environment Setup
+```bash
+conda env create -f requirements.yaml && conda activate spagbol
+```
+
+### 🐍 Stage 1 - Image Retrieval
+
+
+### 🐍 Stage 2 - VLM Re-ranking
+
+
+
 
