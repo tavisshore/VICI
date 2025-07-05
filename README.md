@@ -16,5 +16,8 @@
  <a href="https://locusrobotics.com/">Locus Robotics</a>
 </p>
 
+![vici_diagram](https://github.com/user-attachments/assets/3fe71cbe-2850-4c00-88ac-60b60317bab5)
 
 </div>
+
+
