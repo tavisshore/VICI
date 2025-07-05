@@ -1,6 +1,6 @@
 <div align="center">     
 
-# 🌍🚗 SpaGBOL: Spatial-Graph-Based Orientated Localisation 📡🗺️ 
+# 🌍🚗 VICI: VLM-Instructed Cross-view Image-localisation 📡🗺️ 
 <p align="middle">
  <a href="https://zxh009123.github.io/">Xiaohan Zhang*</a>
  <a href="https://tavisshore.co.uk/">Tavis Shore*</a>
