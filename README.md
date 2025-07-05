@@ -60,7 +60,7 @@
 ## 📊 Evaluation
 ### 🐍 Environment Setup
 ```bash
-conda env create -f requirements.yaml && conda activate spagbol
+conda env create -n ENV -f requirements.yaml && conda activate ENV
 ```
 
 ### 🐍 Stage 1 - Image Retrieval
