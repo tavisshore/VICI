@@ -4,7 +4,7 @@
 <p align="middle">
  <a href="https://zxh009123.github.io/">Xiaohan Zhang*</a>
  <a href="https://tavisshore.co.uk/">Tavis Shore*</a>
- <a href="">Chen Chen</a>
+ <a href="">Chen Chen</a> <br>
  <a href="https://cvssp.org/Personal/OscarMendez/index.html">Oscar Mendez</a>
  <a href="https://personalpages.surrey.ac.uk/s.hadfield/biography.html">Simon Hadfield</a>
  <a href="https://www.uvm.edu/cems/cs/profile/safwan-wshah">Safwan Wshah</a>
