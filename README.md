@@ -48,7 +48,7 @@
 | 0.5 | 24.89 | 52.03 | 62.66 |
 
 ### 🎯 Ablation study and baseline comparison.
-|           Configuration           | R@1   | R@5   | R@10  |
+|               Model               | R@1   | R@5   | R@10  |
 |:---------------------------------:|-------|-------|-------|
 |  U1652~\cite{zheng2020university} | 1.20  | -     | -     |
 | LPN w/o drone~\cite{wang2021each} | 0.74  | -     | -     |
@@ -65,8 +65,29 @@ conda env create -n ENV -f requirements.yaml && conda activate ENV
 
 ### 🐍 Stage 1 - Image Retrieval
 
+efore running Stage 1, configure your dataset paths:
+
+1. Navigate to the `/config/` directory.
+2. Open the `default.yaml` file (or copy it to a new file).
+3. Replace the placeholder values (e.g., `DATA_ROOT`) with the actual paths to your dataset and related files.
+
+Once your configuration file is ready, you can train Stage 1 using:
+
+```bash
+python stage_1.py --config YOUR_CONFIG_FILE_NAME
+```
 
 ### 🐍 Stage 2 - VLM Re-ranking
+To run Stage 2, you need to:
+1. Open the stage_2.py file.
+2. Replace the relevant placeholders (e.g., the path to the answer file from Stage 1 and your Gemini API key).
+3. Ensure any other required directories or options are correctly set.
+
+Then, simply run:
+```bash
+python stage_2.py
+```
+This will perform re-ranking using a Vision-Language Model (VLM) on top of the initial retrieval results. There will be a `LLM_re_ranked_answer.txt` in the answer directory and a `reasons.json` containing all the reasons for re-ranking.
 
 
 ## 📗 Related Works
