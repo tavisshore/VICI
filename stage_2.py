@@ -19,7 +19,7 @@ def encode_image(image_path):
     return base64.b64encode(image_file.read()).decode('utf-8')
 
 class LLMReRanker:
-    def __init__(self, mode='ollama', api_key=None, data_root = '/work1/wshah/xzhang/data/university-1652/University-1652/test'):
+    def __init__(self, mode='ollama', api_key=None, data_root = ''):
         """
         Initializes the LLMReRanker.
         mode: str: The mode of operation. Options are 'ollama', 'gemini', or 'claude'.
@@ -214,7 +214,8 @@ def save_reranked_results_to_file(output_file_path, all_reranked_data):
 
 # --- Main Execution ---
 if __name__ == "__main__":
-    answer_root_dir = os.path.join('src', 'results', '0')
+    # answer_root_dir = os.path.join('src', 'results', '0')
+    answer_root_dir = 'YOUR_ANSWER_ROOT_DIR'  # Replace with your actual answer root directory which contains the answer.txt file
     query_file_path = os.path.join('src','data','query_street_name.txt')
     answer_file_path = os.path.join(answer_root_dir, 'answer.txt')
     weighted_output_file_path = os.path.join(answer_root_dir, 'weighted_re_ranked_answer.txt')  # Path for the weighted output file
@@ -224,7 +225,7 @@ if __name__ == "__main__":
     LLM_MODEL = 'gemini'  # Change to 'ollama', 'gemini', or 'claude' as needed
 
     API_KEY = "GEMINI_API_KEY"  # Replace with your actual API key for Gemini
-    llm_reranker_instance = LLMReRanker(mode=LLM_MODEL, api_key=API_KEY, data_root='../scratch/university-1652/University-1652/test/')
+    llm_reranker_instance = LLMReRanker(mode=LLM_MODEL, api_key=API_KEY, data_root='REPLACE_WITH_YOUR_DATA_ROOT_DIR')  # Replace with your challenge data root directory
 
     query_names = read_query_names(query_file_path)
     initial_rankings = read_initial_rankings(answer_file_path)

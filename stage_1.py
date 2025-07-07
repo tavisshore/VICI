@@ -5,7 +5,7 @@ from lightning.pytorch import loggers as plg
 from lightning.pytorch.callbacks import ModelCheckpoint
 # from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.tuner.tuning import Tuner
-from src.models.vanilla_cheat import Vanilla
+# from src.models.vanilla_cheat import Vanilla
 from src.models.ssl import SSL
 from config.cfg import get_cfg_defaults
 from src.utils import results_dir
@@ -53,12 +53,9 @@ checkpoint_callback = ModelCheckpoint(monitor='val_mean', mode="max", dirpath=f'
 
 # early_stop_callback = EarlyStopping(monitor="train_1", min_delta=0.1, patience=10, verbose=False, mode="max", strict=False)
 
-if cfg.model_wrapper == 'vanilla':
-    model = Vanilla(cfg)
-elif cfg.model_wrapper == 'ssl':
-    model = SSL(cfg)
-else:
-    raise ValueError(f"Unknown model wrapper: {cfg.model_wrapper}")
+
+model = SSL(cfg)
+
 
 trainer = pl.Trainer(max_epochs=cfg.model.epochs, devices=cfg.system.gpus, 
                      logger=wandb_logger if not cfg.debug else None,
