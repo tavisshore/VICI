@@ -23,7 +23,7 @@
 ## 📓 Description 
 
 ### 🧬 Feature Extractors
-<center>
+<div align="center">
  
 |  Backbone  | Params (M) | FLOPs (G) | Dims |  R@1  |  R@5  |  R@10 |
 |:----------:|:----------:|:---------:|:----:|:-----:|:-----:|:-----:|
@@ -34,10 +34,10 @@
 |  DINOv2-B  |     86     |    152    |  768 | 17.37 | 36.14 | 46.96 |
 |  DINOv2-L  |     304    |    507    | 1024 | 27.49 | 51.96 | 63.13 |
 
-</center>
+</div>
 
 ### 🧰 Vision-Language Models
-<center>
+<div align="center">
  
 |          VLM          | R@1   | R@5   | R@10  |
 |:---------------------:|-------|-------|-------|
@@ -45,11 +45,11 @@
 | Gemini 2.5 Flash Lite | 23.54 | 48.39 | 63.13 |
 |    Gemini 2.5 Flash   | 30.21 | 53.04 | 63.13 |
 
-</center>
+</div>
 
 ### 🛸 Drone Augmentation
-<center>
- 
+
+<div align="center"> 
 | $P$ |  R@1  |  R@5  |  R@10 |
 |:---:|:-----:|:-----:|:-----:|
 |  0  | 24.47 | 48.16 | 60.99 |
@@ -57,11 +57,11 @@
 | 0.3 | 27.49 | 51.96 | 63.13 |
 | 0.5 | 24.89 | 52.03 | 62.66 |
 
-</center>
+</div>
 
 ### 🎯 Ablation study and baseline comparison.
-<center>
- 
+
+<div align="center"> 
 |               Model               | R@1   | R@5   | R@10  |
 |:---------------------------------:|-------|-------|-------|
 |  U1652~\cite{zheng2020university} | 1.20  | -     | -     |
@@ -71,7 +71,8 @@
 |            + Drone Data           | 27.49 | 51.96 | 63.13 |
 |        + VLM Re-rank (Ours)       | 30.21 | 53.04 | 63.13 |
 
-</center>
+</div>
+
 
 ## 📊 Evaluation
 ### 🐍 Environment Setup
