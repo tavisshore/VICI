@@ -50,6 +50,7 @@
 ### 🛸 Drone Augmentation
 
 <div align="center"> 
+ 
 | $P$ |  R@1  |  R@5  |  R@10 |
 |:---:|:-----:|:-----:|:-----:|
 |  0  | 24.47 | 48.16 | 60.99 |
@@ -62,6 +63,7 @@
 ### 🎯 Ablation study and baseline comparison.
 
 <div align="center"> 
+
 |               Model               | R@1   | R@5   | R@10  |
 |:---------------------------------:|-------|-------|-------|
 |  U1652~\cite{zheng2020university} | 1.20  | -     | -     |
