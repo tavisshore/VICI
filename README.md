@@ -65,7 +65,7 @@ conda env create -n ENV -f requirements.yaml && conda activate ENV
 
 ### 🐍 Stage 1 - Image Retrieval
 
-efore running Stage 1, configure your dataset paths:
+Before running Stage 1, configure your dataset paths:
 
 1. Navigate to the `/config/` directory.
 2. Open the `default.yaml` file (or copy it to a new file).
