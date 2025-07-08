@@ -16,6 +16,11 @@
  <a href="https://locusrobotics.com/">Locus Robotics</a>
 </p>
 
+[![arxiv](https://img.shields.io/badge/cs.LG-2507.04107-b31b1b?style=flat&logo=arxiv&logoColor=red)](https://arxiv.org/abs/2507.04107)
+[![Conference](http://img.shields.io/badge/Under--Review-2025-4b44ce.svg)](https://wacv2025.thecvf.com/)
+[![Project Page](http://img.shields.io/badge/Pending-Page-green)](https://tavisshore.co.uk/vici/)
+[![License](https://img.shields.io/badge/license-MIT-blue)]()
+
 ![vici_diagram](https://github.com/user-attachments/assets/3fe71cbe-2850-4c00-88ac-60b60317bab5)
 
 </div>
