@@ -17,7 +17,7 @@
 </p>
 
 [![arxiv](https://img.shields.io/badge/cs.LG-2507.04107-b31b1b?style=flat&logo=arxiv&logoColor=red)](https://arxiv.org/abs/2507.04107)
-[![Conference](http://img.shields.io/badge/Under--Review-2025-4b44ce.svg)](https://wacv2025.thecvf.com/)
+[![Conference](http://img.shields.io/badge/Under--Review-2025-4b44ce.svg)](https://www.zdzheng.xyz/ACMMM2025Workshop-UAV/)
 [![Project Page](http://img.shields.io/badge/Pending-Page-green)](https://tavisshore.co.uk/vici/)
 [![License](https://img.shields.io/badge/license-MIT-blue)]()
 
