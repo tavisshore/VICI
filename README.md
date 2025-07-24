@@ -99,6 +99,7 @@ Once your configuration file is ready, you can train Stage 1 using:
 ```bash
 python stage_1.py --config YOUR_CONFIG_FILE_NAME
 ```
+You can also download our pre-trained weights [here](https://drive.google.com/drive/folders/1g16RWfDOs-c3oEbiEajr3gpn-q75xBvX?usp=sharing). 
 
 ### 🐍 Stage 2 - VLM Re-ranking
 To run Stage 2, you need to:
