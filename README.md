@@ -20,6 +20,8 @@
 [![Conference](http://img.shields.io/badge/ACMMM--UAVM-2025-4b44ce.svg)](https://www.zdzheng.xyz/ACMMM2025Workshop-UAV/)
 [![License](https://img.shields.io/badge/license-MIT-blue)]()
 
+[![University1652 - Benchmark](https://forthebadge.com/api/badges/generate?panels=2&primaryLabel=University1652+-+Benchmark&secondaryLabel=%231+SOTA&primaryBGColor=%2331C4F3&primaryTextColor=%23FFFFFF&secondaryBGColor=%23389AD5&secondaryTextColor=%23FFFFFF&primaryFontSize=12&primaryFontWeight=600&primaryLetterSpacing=2&primaryFontFamily=Roboto&primaryTextTransform=uppercase&secondaryFontSize=12&secondaryFontWeight=900&secondaryLetterSpacing=2&secondaryFontFamily=Montserrat&secondaryTextTransform=uppercase&primaryIcon=apacherocketmq&primaryIconColor=%23FFFFFF&primaryIconSize=16&primaryIconPosition=left)](https://github.com/layumi/University1652-Baseline/blob/master/State-of-the-art/README.md#ground---satellite)
+
 ![vici_diagram](https://github.com/user-attachments/assets/3fe71cbe-2850-4c00-88ac-60b60317bab5)
 
 </div>
@@ -137,5 +139,6 @@ This will perform re-ranking using a Vision-Language Model (VLM) on top of the i
    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=tavisshore/VICI&type=Date" />
  </picture>
 </a>
+
 
 
